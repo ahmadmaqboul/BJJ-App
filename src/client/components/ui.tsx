@@ -163,18 +163,18 @@ export function Badge({
 }
 
 /**
- * Belt and stripe count. The belt colour is reinforced by its name in text and
- * the stripes are drawn as discrete marks, so neither relies on colour alone.
+ * Belt and stripe count. The name is always written out and the stripes are
+ * drawn as discrete marks, so the grade never rests on the belt colour alone —
+ * which matters most for a white belt with no stripes, whose pill is otherwise
+ * a blank shape on a pale surface.
  */
 export function BeltBadge({
   belt,
   stripes,
-  showName = true,
   className,
 }: {
   belt: Belt;
   stripes: number;
-  showName?: boolean;
   className?: string;
 }) {
   const t = useT();
@@ -188,7 +188,7 @@ export function BeltBadge({
       )}
       style={{ background: 'var(--belt-bg)', color: 'var(--belt-ink)' }}
     >
-      {showName && t(beltKey(belt))}
+      {t(beltKey(belt))}
       {stripes > 0 && (
         <span className="flex items-center gap-[2px]" aria-label={`${stripes}`}>
           {Array.from({ length: stripes }, (_, i) => (

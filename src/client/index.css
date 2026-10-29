@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -102,7 +104,8 @@
   [data-belt='white'] {
     --belt-bg: #f3f4f6;
     --belt-ink: #0b0b0b;
-    --belt-ring: #c3c2b7;
+    /* A white belt sits on a near-white surface, so it needs a real edge. */
+    --belt-ring: #a8a6a0;
   }
   [data-belt='blue'] {
     --belt-bg: #1d4ed8;

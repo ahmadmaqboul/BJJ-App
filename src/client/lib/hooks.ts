@@ -77,23 +77,28 @@ export function useOnline(): boolean {
 }
 
 export type Theme = 'system' | 'light' | 'dark';
-const THEME_KEY = 'jj.theme';
+export const THEME_KEY = 'jj.theme';
+
+export function readStoredTheme(): Theme {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    if (v === 'light' || v === 'dark' || v === 'system') return v;
+  } catch {
+    // Blocked storage just means the system preference applies.
+  }
+  return 'system';
+}
 
 /**
- * Theme choice. `system` removes the stamp so the CSS media query decides;
- * light and dark stamp data-theme, which the stylesheet lets win over the OS.
+ * Applies the theme choice to the document. `system` removes the stamp so the
+ * CSS media query decides; light and dark stamp data-theme, which the
+ * stylesheet lets win over the OS setting.
+ *
+ * This must run at the app root rather than on the settings screen — mounted
+ * only there, the stamp would be lost the moment the user navigated anywhere
+ * else, and a chosen dark theme would silently revert to light.
  */
-export function useTheme(): [Theme, (t: Theme) => void] {
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const v = localStorage.getItem(THEME_KEY);
-      if (v === 'light' || v === 'dark' || v === 'system') return v;
-    } catch {
-      // Blocked storage just means the system preference applies.
-    }
-    return 'system';
-  });
-
+export function useApplyTheme(theme: Theme): void {
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'system') root.removeAttribute('data-theme');
@@ -104,8 +109,6 @@ export function useTheme(): [Theme, (t: Theme) => void] {
       // Not persisting the theme is survivable.
     }
   }, [theme]);
-
-  return [theme, setTheme];
 }
 
 /** Debounces a fast-changing value, for search boxes. */

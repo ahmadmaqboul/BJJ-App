@@ -71,7 +71,8 @@ check(
   ali?.status === 'blocked_attendance',
   { status: ali?.status, short: ali?.classesShort },
 );
-check('and is reported short by 48 classes', ali?.classesShort === 48, ali?.classesShort);
+check('and is reported short by 46 classes (48 required, 2 done)',
+  ali?.classesShort === 46, ali?.classesShort);
 const inactiveCount = board?.counts?.inactive ?? 0;
 check('6 inactive members excluded from promotion flow', inactiveCount === 6, board?.counts);
 
@@ -184,15 +185,17 @@ const card = (r.body?.purchases ?? []).find((p) => p.id === packPurchase.id);
 check('marking absent returns the consumed session', card?.sessions_used === 0, card);
 
 console.log('\n== promotions ==');
-// احمد مقبول is white/4 -> next award is the blue belt.
+// احمد مقبول is blue/0 since the sheet update, so the next award is stripe 1.
 const ahmad = members.find((m) => m.nameAr === 'احمد مقبول');
+check('احمد مقبول imported as a blue belt with no stripes',
+  ahmad.belt === 'blue' && ahmad.stripes === 0, { belt: ahmad.belt, stripes: ahmad.stripes });
 r = await call('POST', `/api/promotions/member/${ahmad.id}`, {});
 check('promotion refused while attendance gate is short',
   r.status === 409 && String(r.body?.error).startsWith('not_eligible'), r.body?.error);
 
 r = await call('POST', `/api/promotions/member/${ahmad.id}`, { override: true, promotedOn: '2026-10-29' });
 check('override awards it', r.status === 201, r.body);
-check('white/4 -> blue/0', r.body?.member?.belt === 'blue' && r.body?.member?.stripes === 0, r.body?.member);
+check('blue/0 -> blue/1', r.body?.member?.belt === 'blue' && r.body?.member?.stripes === 1, r.body?.member);
 check('class baseline reset so the next cycle starts at zero',
   r.body?.member?.classesAtLastPromotion === 115, r.body?.member?.classesAtLastPromotion);
 
@@ -201,13 +204,16 @@ check('eligibility now counts 0 classes since promotion', r.body?.eligibility?.c
 check('belt history kept both rows', (r.body?.promotions ?? []).length === 2, (r.body?.promotions ?? []).length);
 
 r = await call('DELETE', `/api/promotions/member/${ahmad.id}/latest`);
-check('undo restores white/4', r.body?.member?.belt === 'white' && r.body?.member?.stripes === 4, r.body?.member);
+check('undo restores blue/0', r.body?.member?.belt === 'blue' && r.body?.member?.stripes === 0, r.body?.member);
 check('and restores the old class baseline', r.body?.member?.classesAtLastPromotion === 107, r.body?.member?.classesAtLastPromotion);
 
 console.log('\n== permissions ==');
+// Every member was imported with a phone, so omitting the login uses theirs.
 r = await call('POST', `/api/members/${hamza.id}/login`, { role: 'player' });
-check('login refused when the member has no phone number', r.status === 400, r.body);
+check('login defaults to the member\'s own phone number',
+  r.status === 200 && r.body?.login === hamza.phone, { got: r.body?.login, want: hamza.phone });
 
+// Re-issuing against an explicit number moves the login and reissues the PIN.
 const playerLogin = '0599000042';
 r = await call('POST', `/api/members/${hamza.id}/login`, { role: 'player', login: playerLogin });
 const playerPin = r.body?.pin;

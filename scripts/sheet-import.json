@@ -18,7 +18,7 @@
     { "name_ar": "ابراهيم حسن", "belt": "blue", "stripes": 2, "last_promotion": "2025-11-01", "total": 57, "pre2026": 48,
       "months": { "1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 0, "7": 0, "8": 0, "9": 0, "10": 0 }, "active": true },
 
-    { "name_ar": "احمد مقبول", "belt": "white", "stripes": 4, "last_promotion": "2026-10-04", "total": 115, "pre2026": 48,
+    { "name_ar": "احمد مقبول", "belt": "blue", "stripes": 0, "last_promotion": "2026-10-04", "total": 115, "pre2026": 48,
       "months": { "1": 8, "2": 7, "3": 4, "4": 9, "5": 7, "6": 8, "7": 8, "8": 5, "9": 3, "10": 8 }, "active": true,
       "last_payment": "2026-10-15", "is_admin": true },
 

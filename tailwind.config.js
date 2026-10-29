@@ -29,9 +29,11 @@ export default {
         'success-text': 'var(--success-text)',
       },
       fontFamily: {
-        // System sans in both scripts: no webfont download, so the app opens
-        // instantly on a phone and works with no network at all.
+        // IBM Plex Sans Arabic, self-hosted and precached by the service
+        // worker, with a system stack behind it for the first paint and for
+        // any glyph the webfont does not cover.
         sans: [
+          '"IBM Plex Sans Arabic"',
           'system-ui',
           '-apple-system',
           'Segoe UI',

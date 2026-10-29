@@ -1,6 +1,43 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { Button, Card, cx } from './ui';
+
+/**
+ * The chart is drawn at 1 SVG unit = 1 CSS pixel so that the mark specs (a
+ * 24px bar cap, a 2px gap) mean what they say. A scaled viewBox would stretch
+ * a "24 unit" bar into a 50px slab on a wide screen.
+ */
+function useMeasuredWidth(fallback = 320): [React.RefObject<HTMLDivElement>, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(fallback);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const apply = () => setWidth(Math.max(200, Math.round(el.clientWidth)));
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return [ref, width];
+}
+
+/** A bar rounded only at its data end, square where it meets the baseline. */
+function roundedTopBar(x: number, y: number, w: number, h: number, r: number): string {
+  const radius = Math.min(r, w / 2, h);
+  return [
+    `M ${x} ${y + h}`,
+    `L ${x} ${y + radius}`,
+    `Q ${x} ${y} ${x + radius} ${y}`,
+    `L ${x + w - radius} ${y}`,
+    `Q ${x + w} ${y} ${x + w} ${y + radius}`,
+    `L ${x + w} ${y + h}`,
+    'Z',
+  ].join(' ');
+}
 
 export interface MonthlyPoint {
   /** 'YYYY-MM', or 'earlier' for the sheet's pre-2026 catch-all bucket. */
@@ -31,6 +68,7 @@ export function AttendanceChart({
   const t = useT();
   const [showTable, setShowTable] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
+  const [plotRef, width] = useMeasuredWidth();
 
   const earlier = useMemo(
     () => data.find((d) => d.period === 'earlier')?.classes ?? 0,
@@ -56,17 +94,17 @@ export function AttendanceChart({
     return <p className="px-1 py-6 text-center text-sm text-ink-muted">{t('chart.noData')}</p>;
   }
 
-  // Geometry in viewBox units; the SVG scales to its container.
-  const W = 320;
-  const H = 128;
-  const padTop = 16;
-  const padBottom = 20;
-  const padX = 4;
+  // Geometry in CSS pixels, so the 24px cap and the 2px gap are literal.
+  const W = width;
+  const H = 150;
+  const padTop = 20;
+  const padBottom = 22;
+  const padX = 18;
   const plotH = H - padTop - padBottom;
   const band = months.length ? (W - padX * 2) / months.length : W;
-  // Capped so a wide container never produces slab-like bars, and the 2px
-  // surface gap between neighbours is preserved by the band leftover.
-  const barW = Math.min(24, Math.max(6, band - 6));
+  // Capped so a wide container never produces slab-like bars; the leftover of
+  // the band is the surface gap that separates neighbours.
+  const barW = Math.max(4, Math.min(24, band - 6));
 
   const yOf = (v: number) => padTop + plotH * (1 - v / max);
   const ticks = [0, Math.round(max / 2), max].filter((v, i, a) => a.indexOf(v) === i);
@@ -87,11 +125,11 @@ export function AttendanceChart({
 
       {/* The time axis runs left-to-right in both languages, as it does in
           every spreadsheet the team already uses. */}
-      <div className="relative" style={{ direction: 'ltr' }}>
+      <div className="relative" style={{ direction: 'ltr' }} ref={plotRef}>
         <svg
+          width={W}
+          height={H}
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full"
-          style={{ height: 'auto' }}
           role="img"
           aria-label={t('chart.monthlyAttendance')}
         >
@@ -104,13 +142,13 @@ export function AttendanceChart({
                 y2={yOf(v)}
                 stroke={v === 0 ? 'var(--axis)' : 'var(--grid)'}
                 strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
+                shapeRendering="crispEdges"
               />
               <text
-                x={padX}
-                y={yOf(v) - 3}
+                x={0}
+                y={yOf(v) + 3}
                 className="tnum"
-                fontSize="8"
+                fontSize="10"
                 fill="var(--ink-muted)"
               >
                 {v}
@@ -142,12 +180,9 @@ export function AttendanceChart({
                   aria-label={`${monthLabel(m.period)}: ${m.classes}`}
                 />
                 {h > 0 && (
-                  <rect
-                    x={x}
-                    y={y}
-                    width={barW}
-                    height={h}
-                    rx="2"
+                  // Rounded at the data end, square at the baseline.
+                  <path
+                    d={roundedTopBar(x, y, barW, h, 4)}
                     fill="var(--series-1)"
                     opacity={hover === null || active ? 1 : 0.55}
                     pointerEvents="none"
@@ -155,10 +190,10 @@ export function AttendanceChart({
                 )}
                 <text
                   x={padX + band * i + band / 2}
-                  y={H - 6}
+                  y={H - 7}
                   textAnchor="middle"
                   className="tnum"
-                  fontSize="8"
+                  fontSize="10"
                   fill={active ? 'var(--ink-1)' : 'var(--ink-muted)'}
                   pointerEvents="none"
                 >
@@ -171,7 +206,7 @@ export function AttendanceChart({
                     y={y - 4}
                     textAnchor="middle"
                     className="tnum"
-                    fontSize="9"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--ink-1)"
                     pointerEvents="none"
@@ -185,7 +220,7 @@ export function AttendanceChart({
                     y={y - 4}
                     textAnchor="middle"
                     className="tnum"
-                    fontSize="9"
+                    fontSize="11"
                     fontWeight="600"
                     fill="var(--ink-1)"
                     pointerEvents="none"

@@ -81,19 +81,21 @@ say();
 
 // --------------------------------------------------------- promotion rules ---
 say('-------------------------------------------------------- promotion rules ---');
-say('-- Seeded from what the team already practises: the sheet sets every');
-say('-- "تاريخ الاستحقاق القادم" to exactly 6 months after the last promotion.');
-say('-- The classes_* thresholds are the half the sheet was missing — they stop a');
-say('-- member going up on elapsed time alone. ~8 classes/month means a full');
-say('-- 6-month cycle is ~48 classes, so 40 is roughly 83% attendance.');
-say('-- All of this is editable from Settings → Promotion rules.');
+say("-- The coach's rule, in his words: a stripe every 6 months, where those 6");
+say('-- months mean 6 months of ATTENDANCE at roughly 8 classes a month — so 48');
+say('-- classes. The sheet only ever checked the date half of that, which is how');
+say('-- a purple belt with 2 total classes came to read as eligible.');
+say('--');
+say('-- 48 is the full expected count, so a member who misses even one class in');
+say('-- the cycle shows as short rather than due. Lower classes_per_stripe in');
+say('-- Settings → Promotion rules if a tolerance is wanted (40 ≈ 83% attendance).');
 const rules = [
   // belt,    mo/stripe, cls/stripe, max, mo→belt, cls→belt, min_age, next
-  ['white', 6, 40, 4, 6, 40, null, 'blue'],
-  ['blue', 6, 40, 4, 6, 40, 16, 'purple'],
-  ['purple', 6, 50, 4, 6, 50, 16, 'brown'],
-  ['brown', 6, 50, 4, 6, 50, 18, 'black'],
-  ['black', 12, 60, 4, 0, 0, 19, null],
+  ['white', 6, 48, 4, 6, 48, null, 'blue'],
+  ['blue', 6, 48, 4, 6, 48, 16, 'purple'],
+  ['purple', 6, 48, 4, 6, 48, 16, 'brown'],
+  ['brown', 6, 48, 4, 6, 48, 18, 'black'],
+  ['black', 12, 96, 4, 0, 0, 19, null],
 ];
 for (const r of rules) {
   say(

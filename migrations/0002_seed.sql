@@ -13,17 +13,19 @@ INSERT INTO settings (key, value) VALUES ('promotion_lookahead_days', '60');
 INSERT INTO settings (key, value) VALUES ('imported_from_sheet_on', '2026-10-29');
 
 -------------------------------------------------------- promotion rules ---
--- Seeded from what the team already practises: the sheet sets every
--- "تاريخ الاستحقاق القادم" to exactly 6 months after the last promotion.
--- The classes_* thresholds are the half the sheet was missing — they stop a
--- member going up on elapsed time alone. ~8 classes/month means a full
--- 6-month cycle is ~48 classes, so 40 is roughly 83% attendance.
--- All of this is editable from Settings → Promotion rules.
-INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('white', 6, 40, 4, 6, 40, NULL, 'blue');
-INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('blue', 6, 40, 4, 6, 40, 16, 'purple');
-INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('purple', 6, 50, 4, 6, 50, 16, 'brown');
-INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('brown', 6, 50, 4, 6, 50, 18, 'black');
-INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('black', 12, 60, 4, 0, 0, 19, NULL);
+-- The coach's rule, in his words: a stripe every 6 months, where those 6
+-- months mean 6 months of ATTENDANCE at roughly 8 classes a month — so 48
+-- classes. The sheet only ever checked the date half of that, which is how
+-- a purple belt with 2 total classes came to read as eligible.
+--
+-- 48 is the full expected count, so a member who misses even one class in
+-- the cycle shows as short rather than due. Lower classes_per_stripe in
+-- Settings → Promotion rules if a tolerance is wanted (40 ≈ 83% attendance).
+INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('white', 6, 48, 4, 6, 48, NULL, 'blue');
+INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('blue', 6, 48, 4, 6, 48, 16, 'purple');
+INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('purple', 6, 48, 4, 6, 48, 16, 'brown');
+INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('brown', 6, 48, 4, 6, 48, 18, 'black');
+INSERT INTO promotion_rules (belt, months_per_stripe, classes_per_stripe, max_stripes, months_to_next_belt, classes_to_next_belt, min_age, next_belt) VALUES ('black', 12, 96, 4, 0, 0, 19, NULL);
 
 ------------------------------------------------------------------ plans ---
 -- PLACEHOLDER PRICES — set the real ones in Settings → Plans before use.
@@ -37,7 +39,7 @@ INSERT INTO plans (id, name_ar, name_en, type, price_minor, currency, sessions_i
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (1, 'علاء شريم', NULL, '2026-10-04', 'active', 'purple', 0, '2026-10-04', 126, 118, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (2, 'نادر مشة', NULL, '2026-10-04', 'active', 'blue', 4, '2026-10-04', 84, 79, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (3, 'ابراهيم حسن', NULL, '2025-11-01', 'active', 'blue', 2, '2025-11-01', 57, 48, NULL);
-INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (4, 'احمد مقبول', NULL, '2026-10-04', 'active', 'white', 4, '2026-10-04', 115, 107, 'آخر دفعة في الشيت: 2026-10-15');
+INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (4, 'احمد مقبول', NULL, '2026-10-04', 'active', 'blue', 0, '2026-10-04', 115, 107, 'آخر دفعة في الشيت: 2026-10-15');
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (5, 'محمد الشنار', NULL, '2025-11-01', 'inactive', 'white', 1, '2025-11-01', 48, 48, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (6, 'نور الدين سركجي', NULL, '2025-11-01', 'inactive', 'white', 1, '2025-11-01', 48, 48, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (7, 'مؤمن السخل', NULL, '2025-11-01', 'inactive', 'white', 1, '2025-11-01', 48, 48, NULL);
@@ -178,7 +180,7 @@ INSERT INTO legacy_monthly_attendance (member_id, year, month, classes) VALUES (
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (1, 'purple', 0, 'initial', '2026-10-04', 118, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (2, 'blue', 4, 'initial', '2026-10-04', 79, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (3, 'blue', 2, 'initial', '2025-11-01', 48, 'مستورد من شيت الترقيات');
-INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (4, 'white', 4, 'initial', '2026-10-04', 107, 'مستورد من شيت الترقيات');
+INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (4, 'blue', 0, 'initial', '2026-10-04', 107, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (5, 'white', 1, 'initial', '2025-11-01', 48, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (6, 'white', 1, 'initial', '2025-11-01', 48, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (7, 'white', 1, 'initial', '2025-11-01', 48, 'مستورد من شيت الترقيات');
