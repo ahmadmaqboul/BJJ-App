@@ -1,0 +1,94 @@
+{
+  "_source": "JUI-Jitsu Sheet — https://docs.google.com/spreadsheets/d/18ud1asUBNytv6Pls_KowCYX9KuczrBv19IoQBhY4LCo",
+  "_exported_on": "2026-10-29",
+  "_notes": [
+    "belt/stripes/last_promotion/total come from the الترقيات tab.",
+    "pre2026 is the sheet's 'سنة 2024' column, which is really an all-history-before-2026 bucket: for every member pre2026 + sum(months) === total, which is how it was verified on import.",
+    "months are the 2026 columns 'شهر 1'..'شهر 12' from the الحضور والغياب السنوي tab.",
+    "active=true means the member appears on the الحضور والغياب الشهري tab (the 19-name working roster); the other 6 are on the promotions tab only.",
+    "last_payment comes from the 'تاريخ اخر دفعة' column; owes_minor captures the one free-text balance note ('باقي بحسابه ٦٠ ش')."
+  ],
+  "members": [
+    { "name_ar": "علاء شريم", "belt": "purple", "stripes": 0, "last_promotion": "2026-10-04", "total": 126, "pre2026": 48,
+      "months": { "1": 8, "2": 7, "3": 4, "4": 9, "5": 8, "6": 8, "7": 8, "8": 9, "9": 9, "10": 8 }, "active": true },
+
+    { "name_ar": "نادر مشة", "belt": "blue", "stripes": 4, "last_promotion": "2026-10-04", "total": 84, "pre2026": 48,
+      "months": { "1": 2, "2": 4, "3": 4, "4": 6, "5": 3, "6": 4, "7": 4, "8": 3, "9": 1, "10": 5 }, "active": true },
+
+    { "name_ar": "ابراهيم حسن", "belt": "blue", "stripes": 2, "last_promotion": "2025-11-01", "total": 57, "pre2026": 48,
+      "months": { "1": 2, "2": 2, "3": 2, "4": 2, "5": 1, "6": 0, "7": 0, "8": 0, "9": 0, "10": 0 }, "active": true },
+
+    { "name_ar": "احمد مقبول", "belt": "white", "stripes": 4, "last_promotion": "2026-10-04", "total": 115, "pre2026": 48,
+      "months": { "1": 8, "2": 7, "3": 4, "4": 9, "5": 7, "6": 8, "7": 8, "8": 5, "9": 3, "10": 8 }, "active": true,
+      "last_payment": "2026-10-15", "is_admin": true },
+
+    { "name_ar": "محمد الشنار", "belt": "white", "stripes": 1, "last_promotion": "2025-11-01", "total": 48, "pre2026": 48,
+      "months": {}, "active": false },
+
+    { "name_ar": "نور الدين سركجي", "belt": "white", "stripes": 1, "last_promotion": "2025-11-01", "total": 48, "pre2026": 48,
+      "months": {}, "active": false },
+
+    { "name_ar": "مؤمن السخل", "belt": "white", "stripes": 1, "last_promotion": "2025-11-01", "total": 48, "pre2026": 48,
+      "months": {}, "active": false },
+
+    { "name_ar": "احمد نضال", "belt": "white", "stripes": 1, "last_promotion": "2025-11-01", "total": 52, "pre2026": 48,
+      "months": { "1": 4 }, "active": false },
+
+    { "name_ar": "سامح عبد الهادي", "belt": "white", "stripes": 2, "last_promotion": "2026-10-04", "total": 95, "pre2026": 40,
+      "months": { "1": 8, "2": 7, "3": 3, "4": 6, "5": 4, "6": 6, "7": 3, "8": 7, "9": 5, "10": 6 }, "active": true,
+      "last_payment": "2026-10-04" },
+
+    { "name_ar": "اسامة الهيجاوي", "belt": "white", "stripes": 2, "last_promotion": "2025-11-01", "total": 48, "pre2026": 48,
+      "months": {}, "active": true },
+
+    { "name_ar": "محمد دويكات", "belt": "white", "stripes": 1, "last_promotion": "2026-10-04", "total": 52, "pre2026": 0,
+      "months": { "1": 2, "2": 7, "3": 4, "4": 9, "5": 6, "6": 7, "7": 7, "8": 3, "9": 0, "10": 7 }, "active": true,
+      "last_payment": "2026-10-04" },
+
+    { "name_ar": "علي حموضة", "belt": "purple", "stripes": 0, "last_promotion": "2024-09-01", "total": 2, "pre2026": 0,
+      "months": { "9": 1, "10": 1 }, "active": true },
+
+    { "name_ar": "علي الفارس", "belt": "white", "stripes": 0, "last_promotion": "2026-02-10", "total": 5, "pre2026": 0,
+      "months": { "2": 3, "3": 2 }, "active": false },
+
+    { "name_ar": "حسن حجاوي", "belt": "white", "stripes": 0, "last_promotion": "2026-04-07", "total": 9, "pre2026": 0,
+      "months": { "4": 1, "6": 5, "7": 2, "9": 1 }, "active": true,
+      "owes_minor": 6000, "owes_note": "رصيد مدور من الشيت: باقي بحسابه ٦٠ ش" },
+
+    { "name_ar": "محمد ريحان", "belt": "white", "stripes": 0, "last_promotion": "2026-04-12", "total": 26, "pre2026": 0,
+      "months": { "4": 6, "5": 5, "6": 5, "7": 3, "9": 1, "10": 6 }, "active": true,
+      "last_payment": "2026-10-04" },
+
+    { "name_ar": "غالب ابو سير", "belt": "white", "stripes": 1, "last_promotion": "2026-10-04", "total": 52, "pre2026": 0,
+      "months": { "4": 3, "5": 7, "6": 8, "7": 8, "8": 9, "9": 9, "10": 8 }, "active": true,
+      "last_payment": "2026-09-20" },
+
+    { "name_ar": "زيد", "belt": "white", "stripes": 0, "last_promotion": "2026-04-21", "total": 6, "pre2026": 0,
+      "months": { "4": 2, "5": 2, "7": 2 }, "active": true },
+
+    { "name_ar": "أحمد عرفات", "belt": "white", "stripes": 0, "last_promotion": "2026-05-24", "total": 5, "pre2026": 0,
+      "months": { "5": 2, "6": 3 }, "active": false },
+
+    { "name_ar": "حمزة الصدر", "belt": "white", "stripes": 0, "last_promotion": "2026-06-14", "total": 30, "pre2026": 0,
+      "months": { "6": 4, "7": 6, "8": 5, "9": 7, "10": 8 }, "active": true,
+      "last_payment": "2026-10-16" },
+
+    { "name_ar": "أحمد زبلح", "belt": "white", "stripes": 0, "last_promotion": "2026-06-25", "total": 6, "pre2026": 0,
+      "months": { "6": 3, "7": 3 }, "active": true },
+
+    { "name_ar": "علاء عاشور", "belt": "white", "stripes": 0, "last_promotion": "2026-06-18", "total": 35, "pre2026": 0,
+      "months": { "6": 4, "7": 7, "8": 9, "9": 7, "10": 8 }, "active": true },
+
+    { "name_ar": "درويش مسمار", "belt": "white", "stripes": 0, "last_promotion": "2026-10-25", "total": 2, "pre2026": 0,
+      "months": { "10": 2 }, "active": true },
+
+    { "name_ar": "عمر عنبتاوي", "belt": "white", "stripes": 0, "last_promotion": "2026-10-28", "total": 1, "pre2026": 0,
+      "months": { "10": 1 }, "active": true },
+
+    { "name_ar": "سعيد جوابرة", "belt": "white", "stripes": 0, "last_promotion": "2026-10-18", "total": 3, "pre2026": 0,
+      "months": { "10": 3 }, "active": true },
+
+    { "name_ar": "حميد يعيش", "belt": "white", "stripes": 0, "last_promotion": "2026-10-28", "total": 1, "pre2026": 0,
+      "months": { "10": 1 }, "active": true }
+  ]
+}

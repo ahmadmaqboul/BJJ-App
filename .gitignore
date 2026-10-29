@@ -8,3 +8,4 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+scripts/phones.local.json
