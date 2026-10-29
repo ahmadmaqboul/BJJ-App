@@ -9,3 +9,5 @@ npm-debug.log*
 .env.*
 !.env.example
 scripts/phones.local.json
+scripts/phones.local.sql
+*.tsbuildinfo

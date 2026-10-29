@@ -61,7 +61,7 @@
 
     { "name_ar": "غالب ابو سير", "belt": "white", "stripes": 1, "last_promotion": "2026-10-04", "total": 52, "pre2026": 0,
       "months": { "4": 3, "5": 7, "6": 8, "7": 8, "8": 9, "9": 9, "10": 8 }, "active": true,
-      "last_payment": "2026-09-20" },
+      "last_payment": "2026-10-20" },
 
     { "name_ar": "زيد", "belt": "white", "stripes": 0, "last_promotion": "2026-04-21", "total": 6, "pre2026": 0,
       "months": { "4": 2, "5": 2, "7": 2 }, "active": true },

@@ -3,11 +3,14 @@
 //
 // Run: npm run db:seed
 //
-// Phone numbers are personal data and deliberately NOT committed. Drop a
-// gitignored scripts/phones.local.json next to the import file to attach them:
+// Phone numbers are personal data. 0002_seed.sql is committed, so phones never
+// go into it — they are written to scripts/phones.local.sql instead, which is
+// gitignored and applied as a separate step (see README).
+//
+// Supply them in a gitignored scripts/phones.local.json:
 //   { "علاء شريم": "0599123456", "نادر مشة": "0598765432" }
-// Names must match name_ar exactly. Missing ones are simply left NULL and can
-// be filled in from the admin UI instead.
+// Names must match name_ar exactly. Missing ones stay NULL and can be filled
+// in from the admin UI instead.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -18,7 +21,14 @@ const root = join(here, '..');
 
 const sheet = JSON.parse(readFileSync(join(here, 'sheet-import.json'), 'utf8'));
 const phonesPath = join(here, 'phones.local.json');
-const phones = existsSync(phonesPath) ? JSON.parse(readFileSync(phonesPath, 'utf8')) : {};
+const phones = existsSync(phonesPath)
+  ? Object.fromEntries(
+      // Keys starting with _ are notes about the file, not member names.
+      Object.entries(JSON.parse(readFileSync(phonesPath, 'utf8'))).filter(
+        ([k]) => !k.startsWith('_'),
+      ),
+    )
+  : {};
 
 const q = (v) =>
   v === null || v === undefined || v === '' ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
@@ -135,7 +145,6 @@ sheet.members.forEach((m, idx) => {
   const atLastPromotion = m.total - since;
   if (atLastPromotion < 0) throw new Error(`Negative baseline for ${m.name_ar}`);
 
-  const phone = phones[m.name_ar] ?? null;
   unmatchedPhones.delete(m.name_ar);
 
   const notes = [];
@@ -144,10 +153,11 @@ sheet.members.forEach((m, idx) => {
 
   memberRows.push({ id, m, since, atLastPromotion });
 
+  // phone is NULL here by design — see the note at the top of this file.
   say(
     `INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, ` +
       `last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (` +
-      `${id}, ${q(m.name_ar)}, ${q(phone)}, ${q(m.join_date ?? m.last_promotion)}, ` +
+      `${id}, ${q(m.name_ar)}, NULL, ${q(m.join_date ?? m.last_promotion)}, ` +
       `${q(m.active ? 'active' : 'inactive')}, ${q(m.belt)}, ${n(m.stripes)}, ` +
       `${q(m.last_promotion)}, ${n(m.total)}, ${n(atLastPromotion)}, ` +
       `${q(notes.join(' · ') || null)});`,
@@ -211,7 +221,28 @@ writeFileSync(out, lines.join('\n') + '\n');
 const active = sheet.members.filter((m) => m.active).length;
 const withPhone = sheet.members.filter((m) => phones[m.name_ar]).length;
 
+// Phones go to their own gitignored file, applied separately, so no personal
+// data is ever committed in a migration.
+const phoneSqlPath = join(here, 'phones.local.sql');
+if (withPhone) {
+  const phoneLines = [
+    '-- GENERATED from scripts/phones.local.json — contains personal data.',
+    '-- GITIGNORED. Never commit this file.',
+    '-- Apply with:',
+    '--   npx wrangler d1 execute jui-jitsu-db --local  --file scripts/phones.local.sql',
+    '--   npx wrangler d1 execute jui-jitsu-db --remote --file scripts/phones.local.sql',
+    '',
+  ];
+  for (const { id, m } of memberRows) {
+    const phone = phones[m.name_ar];
+    if (!phone) continue;
+    phoneLines.push(`UPDATE members SET phone = ${q(phone)} WHERE id = ${id};`);
+  }
+  writeFileSync(phoneSqlPath, phoneLines.join('\n') + '\n');
+}
+
 console.log(`Wrote ${out}`);
+if (withPhone) console.log(`Wrote ${phoneSqlPath} (gitignored — apply separately)`);
 console.log(`  members ............ ${sheet.members.length} (${active} active, ${sheet.members.length - active} inactive)`);
 console.log(`  phones attached ..... ${withPhone}/${sheet.members.length}${withPhone === 0 ? '  (none — add scripts/phones.local.json or fill them in the admin UI)' : ''}`);
 console.log(`  opening balances .... ${owing.length}`);

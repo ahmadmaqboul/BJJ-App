@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Colour tokens from the validated reference palette. The dark values are
+ * declared twice on purpose: the media query follows the OS setting, the
+ * [data-theme] scope follows the in-app toggle, and the toggle must win both
+ * ways — hence the :not() guard on the media block.
+ */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --surface-2: #ffffff;
+  --plane: #f9f9f7;
+  --ink-1: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgb(11 11 11 / 0.1);
+
+  --series-1: #2a78d6;
+  --series-1-wash: #cde2fb;
+
+  /* Status palette — fixed, never themed. warning/serious are sub-3:1 on the
+     light surface by design, so every status badge ships an icon and a label
+     and never relies on colour alone. */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --success-text: #006300;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --surface-2: #222221;
+    --plane: #0d0d0d;
+    --ink-1: #f0efec;
+    --ink-2: #c3c2b7;
+    --ink-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgb(255 255 255 / 0.1);
+    --series-1: #3987e5;
+    --series-1-wash: #184f95;
+    --success-text: #0ca30c;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --surface-2: #222221;
+  --plane: #0d0d0d;
+  --ink-1: #f0efec;
+  --ink-2: #c3c2b7;
+  --ink-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgb(255 255 255 / 0.1);
+  --series-1: #3987e5;
+  --series-1-wash: #184f95;
+  --success-text: #0ca30c;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-plane text-ink font-sans antialiased;
+    /* Nothing behind the fixed bottom nav gets trapped under it. */
+    min-height: 100dvh;
+  }
+
+  /* Belt colours are domain identity, not a data series. Every belt badge
+     also carries its name in text, so colour never carries it alone. */
+  [data-belt='white'] {
+    --belt-bg: #f3f4f6;
+    --belt-ink: #0b0b0b;
+    --belt-ring: #c3c2b7;
+  }
+  [data-belt='blue'] {
+    --belt-bg: #1d4ed8;
+    --belt-ink: #ffffff;
+    --belt-ring: transparent;
+  }
+  [data-belt='purple'] {
+    --belt-bg: #6d28d9;
+    --belt-ink: #ffffff;
+    --belt-ring: transparent;
+  }
+  [data-belt='brown'] {
+    --belt-bg: #78350f;
+    --belt-ink: #ffffff;
+    --belt-ring: transparent;
+  }
+  [data-belt='black'] {
+    --belt-bg: #111827;
+    --belt-ink: #ffffff;
+    --belt-ring: #383835;
+  }
+
+  /* Columns of figures align; standalone big numbers stay proportional. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* Mirrors an icon that encodes direction (chevrons, arrows) under RTL. */
+  .flip-rtl:where([dir='rtl'] *) {
+    transform: scaleX(-1);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
