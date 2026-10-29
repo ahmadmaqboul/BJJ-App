@@ -1,0 +1,41 @@
+{
+  "name": "jui-jitsu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BJJ team management: attendance, payments, promotions",
+  "scripts": {
+    "dev": "concurrently -k -n vite,worker -c cyan,magenta \"npm:dev:client\" \"npm:dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "wrangler dev",
+    "build": "tsc -b tsconfig.worker.json && vite build",
+    "deploy": "npm run build && wrangler deploy",
+    "db:create": "wrangler d1 create jui-jitsu-db",
+    "db:migrate:local": "wrangler d1 migrations apply jui-jitsu-db --local",
+    "db:migrate": "wrangler d1 migrations apply jui-jitsu-db --remote",
+    "db:seed": "node scripts/gen-seed.mjs",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
+    "db:console": "wrangler d1 execute jui-jitsu-db --local --command",
+    "typecheck": "tsc -b tsconfig.worker.json --noEmit && tsc -p tsconfig.client.json --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.21.1",
+    "wrangler": "^3.95.0"
+  }
+}

@@ -1,0 +1,29 @@
+name = "jui-jitsu"
+main = "src/server/index.ts"
+compatibility_date = "2024-12-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Static SPA assets are served first; anything that isn't a file falls through
+# to the Worker, which handles /api/* and serves index.html for app routes.
+[assets]
+directory = "./dist/client"
+binding = "ASSETS"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jui-jitsu-db"
+# Replace with the id printed by `npm run db:create`
+database_id = "REPLACE_ME_AFTER_db:create"
+migrations_dir = "migrations"
+
+[vars]
+APP_TIMEZONE = "Asia/Hebron"
+DEFAULT_CURRENCY = "ILS"
+
+# Nightly: expire finished subscriptions and recompute promotion eligibility.
+[triggers]
+crons = ["0 1 * * *"]
+
+# SESSION_SECRET must be set as a secret, never committed:
+#   wrangler secret put SESSION_SECRET
