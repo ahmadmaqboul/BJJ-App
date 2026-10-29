@@ -44,9 +44,6 @@ export default defineConfig({
       },
     }),
   ],
-  resolve: {
-    alias: { '@shared': new URL('./src/shared', import.meta.url).pathname },
-  },
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,

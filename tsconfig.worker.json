@@ -11,10 +11,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "composite": true,
-    "types": ["@cloudflare/workers-types"],
-    "paths": {
-      "@shared/*": ["./src/shared/*"]
-    }
+    "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/server", "src/shared"]
 }

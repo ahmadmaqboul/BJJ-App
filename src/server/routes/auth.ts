@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Role } from '@shared/types';
+import type { Role } from '../../shared/types';
 import type { AppBindings } from '../env';
 import {
   SESSION_COOKIE,

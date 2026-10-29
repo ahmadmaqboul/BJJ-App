@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { monthBounds } from '@shared/dates';
-import { evaluateEligibility } from '@shared/promotion';
+import { monthBounds } from '../../shared/dates';
+import { evaluateEligibility } from '../../shared/promotion';
 import type { AppBindings } from '../env';
 import { audit, requireAdmin, requireStaff } from '../middleware';
 import { balancesFor, listMembers, loadRules, loadSettings, setSetting } from '../queries';

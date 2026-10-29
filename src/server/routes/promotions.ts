@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { isIsoDate } from '@shared/dates';
+import { isIsoDate } from '../../shared/dates';
 import {
   compareByUrgency,
   evaluateEligibility,
   nextAward,
   type PromotionStatus,
-} from '@shared/promotion';
-import { BELTS, type Belt } from '@shared/types';
+} from '../../shared/promotion';
+import { BELTS, type Belt } from '../../shared/types';
 import type { AppBindings } from '../env';
 import { assertCanReadMember, audit, requireAdmin, requireStaff } from '../middleware';
 import { getMember, listMembers, loadRules, loadSettings } from '../queries';

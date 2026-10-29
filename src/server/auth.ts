@@ -1,4 +1,4 @@
-import type { Role, SessionUser } from '@shared/types';
+import type { Role, SessionUser } from '../shared/types';
 import type { Env } from './env';
 
 /**

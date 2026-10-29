@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { evaluateEligibility } from '@shared/promotion';
-import { isIsoDate } from '@shared/dates';
-import type { Belt, MemberStatus } from '@shared/types';
+import { evaluateEligibility } from '../../shared/promotion';
+import { isIsoDate } from '../../shared/dates';
+import type { Belt, MemberStatus } from '../../shared/types';
 import type { AppBindings } from '../env';
 import { assertCanReadMember, audit, requireAdmin, requireStaff } from '../middleware';
 import {
@@ -360,7 +360,7 @@ members.post('/:id/login', requireAdmin, async (c) => {
        failed_attempts = 0,
        locked_until = NULL`,
   )
-    .bind(login, login, role, cred.hash, cred.salt, cred.iterations)
+    .bind(id, login, role, cred.hash, cred.salt, cred.iterations)
     .run();
 
   // Keep the member's phone in step with the login they actually use.

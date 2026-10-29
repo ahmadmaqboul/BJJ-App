@@ -14,9 +14,10 @@
     "db:migrate:local": "wrangler d1 migrations apply jui-jitsu-db --local",
     "db:migrate": "wrangler d1 migrations apply jui-jitsu-db --remote",
     "db:seed": "node scripts/gen-seed.mjs",
-    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
+    "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && node scripts/seed-test-admin.mjs",
     "db:console": "wrangler d1 execute jui-jitsu-db --local --command",
     "test": "vitest run",
+    "e2e": "node scripts/e2e.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "check": "npm run typecheck && npm run test"
@@ -28,7 +29,7 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241218.0",
+    "@cloudflare/workers-types": "^5.20261029.1",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
@@ -40,6 +41,6 @@
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.21.1",
     "vitest": "^2.1.9",
-    "wrangler": "^3.95.0"
+    "wrangler": "^4.155.0"
   }
 }

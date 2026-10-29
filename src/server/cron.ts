@@ -1,4 +1,4 @@
-import { today } from '@shared/dates';
+import { today } from '../shared/dates';
 import type { Env } from './env';
 
 /**

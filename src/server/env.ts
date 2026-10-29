@@ -1,4 +1,4 @@
-import type { SessionUser } from '@shared/types';
+import type { SessionUser } from '../shared/types';
 
 export interface Env {
   DB: D1Database;

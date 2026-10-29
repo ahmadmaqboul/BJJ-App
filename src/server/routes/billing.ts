@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { addDays, isIsoDate } from '@shared/dates';
-import { pickCoverage, type Entitlement } from '@shared/billing';
-import type { Coverage, PaymentMethod, PlanType } from '@shared/types';
+import { addDays, isIsoDate } from '../../shared/dates';
+import { pickCoverage, type Entitlement } from '../../shared/billing';
+import type { Coverage, PaymentMethod, PlanType } from '../../shared/types';
 import type { AppBindings, Env } from '../env';
 import { assertCanReadMember, audit, requireAdmin, requireStaff } from '../middleware';
 import { balancesFor, entitlementsFor, getMember, loadSettings } from '../queries';

@@ -1,5 +1,5 @@
-import type { Belt, Member, MemberStatus, PromotionRule, Role } from '@shared/types';
-import type { Entitlement } from '@shared/billing';
+import type { Belt, Member, MemberStatus, PromotionRule, Role } from '../shared/types';
+import type { Entitlement } from '../shared/billing';
 import type { Env } from './env';
 
 /**

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { today } from '@shared/dates';
+import { today } from '../shared/dates';
 import type { AppBindings, Env } from './env';
 import { requireAuth, withToday } from './middleware';
 import authRoutes from './routes/auth';

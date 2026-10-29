@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import type { Role } from '@shared/types';
-import { today } from '@shared/dates';
+import type { Role } from '../shared/types';
+import { today } from '../shared/dates';
 import type { AppBindings } from './env';
 import { readCookie, resolveSession, SESSION_COOKIE } from './auth';
 
