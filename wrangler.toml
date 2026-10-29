@@ -14,7 +14,7 @@ not_found_handling = "none"
 binding = "DB"
 database_name = "jui-jitsu-db"
 # Replace with the id printed by `npm run db:create`
-database_id = "REPLACE_ME_AFTER_db:create"
+database_id = "b63db363-6358-4157-bc71-7ef55d5ab855"
 migrations_dir = "migrations"
 
 [vars]
