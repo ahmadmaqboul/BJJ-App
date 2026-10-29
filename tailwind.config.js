@@ -20,11 +20,13 @@ export default {
         series: {
           DEFAULT: 'var(--series-1)',
           wash: 'var(--series-1-wash)',
+          tint: 'var(--series-tint)',
         },
-        good: 'var(--good)',
-        warning: 'var(--warning)',
-        serious: 'var(--serious)',
-        critical: 'var(--critical)',
+        good: { DEFAULT: 'var(--good)', tint: 'var(--good-tint)' },
+        warning: { DEFAULT: 'var(--warning)', tint: 'var(--warning-tint)' },
+        serious: { DEFAULT: 'var(--serious)', tint: 'var(--serious-tint)' },
+        critical: { DEFAULT: 'var(--critical)', tint: 'var(--critical-tint)' },
+        'success-text': 'var(--success-text)',
       },
       fontFamily: {
         // System sans in both scripts: no webfont download, so the app opens

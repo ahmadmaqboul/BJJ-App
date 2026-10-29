@@ -31,6 +31,14 @@
   --serious: #ec835a;
   --critical: #d03b3b;
   --success-text: #006300;
+
+  /* Faint tints used as badge/row backgrounds. Text on them always uses an ink
+     token, never the status colour, so contrast comes from the ink. */
+  --good-tint: #e7f6e7;
+  --warning-tint: #fdf2db;
+  --serious-tint: #fdeee7;
+  --critical-tint: #fae9e9;
+  --series-tint: #e9f1fc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +56,11 @@
     --series-1: #3987e5;
     --series-1-wash: #184f95;
     --success-text: #0ca30c;
+    --good-tint: #152b16;
+    --warning-tint: #2d2512;
+    --serious-tint: #2e211c;
+    --critical-tint: #2e1a1a;
+    --series-tint: #16243a;
   }
 }
 
@@ -65,6 +78,11 @@
   --series-1: #3987e5;
   --series-1-wash: #184f95;
   --success-text: #0ca30c;
+  --good-tint: #152b16;
+  --warning-tint: #2d2512;
+  --serious-tint: #2e211c;
+  --critical-tint: #2e1a1a;
+  --series-tint: #16243a;
 }
 
 @layer base {

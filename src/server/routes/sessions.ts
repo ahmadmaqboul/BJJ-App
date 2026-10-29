@@ -47,16 +47,29 @@ sessions.post('/', async (c) => {
     startTime?: string | null;
     classType?: ClassType;
     coachMemberId?: number | null;
+    groupId?: number | null;
     techniqueTitle?: string | null;
     techniqueNotes?: string | null;
   }>(c.req);
 
   const settings = await loadSettings(c.env);
   const date = body.date && isIsoDate(body.date) ? body.date : c.get('today');
+
+  // A group carries its own class type and coach, so a class created for a
+  // group inherits them unless the request says otherwise.
+  const group = body.groupId
+    ? await c.env.DB.prepare(
+        `SELECT id, class_type, coach_member_id FROM training_groups WHERE id = ?`,
+      )
+        .bind(body.groupId)
+        .first<{ id: number; class_type: ClassType; coach_member_id: number | null }>()
+    : null;
+  if (body.groupId && !group) throw new HTTPException(404, { message: 'group_not_found' });
+
   const classType =
     body.classType && CLASS_TYPES.includes(body.classType)
       ? body.classType
-      : ((settings.default_class_type as ClassType) ?? 'gi');
+      : (group?.class_type ?? (settings.default_class_type as ClassType) ?? 'gi');
 
   const startTime = body.startTime?.trim() || null;
   if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) {
@@ -75,22 +88,23 @@ sessions.post('/', async (c) => {
   }
 
   const row = await c.env.DB.prepare(
-    `INSERT INTO class_sessions (date, start_time, class_type, coach_member_id,
+    `INSERT INTO class_sessions (date, start_time, class_type, coach_member_id, group_id,
                                  technique_title, technique_notes, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
   )
     .bind(
       date,
       startTime,
       classType,
-      body.coachMemberId ?? null,
+      body.coachMemberId ?? group?.coach_member_id ?? null,
+      group?.id ?? null,
       body.techniqueTitle?.trim() || null,
       body.techniqueNotes?.trim() || null,
       c.get('user').userId,
     )
     .first<{ id: number }>();
 
-  await audit(c, 'session.create', 'class_session', row!.id, { date, classType });
+  await audit(c, 'session.create', 'class_session', row!.id, { date, classType, groupId: group?.id });
   return c.json({ session: await loadSession(c, row!.id) }, 201);
 });
 
@@ -99,18 +113,35 @@ async function loadSession(c: { env: AppBindings['Bindings'] }, id: number) {
 }
 
 /**
- * Session detail including the check-in roster: every active member, whatever
- * is already recorded, and a preview of which entitlement would pay for them.
- * The preview is read-only — nothing is consumed until attendance is saved.
+ * Session detail including the check-in roster, whatever is already recorded,
+ * and a preview of which entitlement would pay for each member. The preview is
+ * read-only — nothing is consumed until attendance is saved.
+ *
+ * When the class belongs to a training group the roster is that group's active
+ * members, so the coach is not scrolling past people who were never in the
+ * room. Classes with no group fall back to everyone active.
  */
 sessions.get('/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const session = await c.env.DB.prepare(`SELECT * FROM class_sessions WHERE id = ?`)
     .bind(id)
-    .first<{ id: number; date: string }>();
+    .first<{ id: number; date: string; group_id: number | null }>();
   if (!session) throw new HTTPException(404, { message: 'session_not_found' });
 
-  const roster = await listMembers(c.env, { status: 'active' });
+  const allActive = await listMembers(c.env, { status: 'active' });
+
+  let roster = allActive;
+  if (session.group_id != null) {
+    const { results: groupIds } = await c.env.DB.prepare(
+      `SELECT member_id FROM group_members WHERE group_id = ?`,
+    )
+      .bind(session.group_id)
+      .all<{ member_id: number }>();
+    const inGroup = new Set((groupIds ?? []).map((r) => r.member_id));
+    // An empty group would otherwise show an empty check-in list, which reads
+    // as a bug; fall back to everyone until the roster is filled in.
+    if (inGroup.size) roster = allActive.filter((m) => inGroup.has(m.id));
+  }
 
   // Anyone already marked stays on the roster even if since made inactive, so
   // a historical session never silently loses attendees.

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatMinor, parseMoney, pickCoverage, settleStatus, type Entitlement } from './billing';
+import {
+  coverageOutlook,
+  formatMinor,
+  parseMoney,
+  pickCoverage,
+  settleStatus,
+  type Entitlement,
+} from './billing';
 
 function ent(over: Partial<Entitlement> = {}): Entitlement {
   return {
@@ -106,6 +113,69 @@ describe('pickCoverage', () => {
     expect(decision.coverage).toBe('single');
     expect(decision.purchaseId).toBe(2);
     expect(decision.remainingAfter).toBe(0);
+  });
+});
+
+describe('coverageOutlook — "when is my next payment due"', () => {
+  it('says due now when nothing is active', () => {
+    expect(coverageOutlook([], '2026-10-29')).toEqual({ kind: 'due_now' });
+  });
+
+  it('reports the paid-through date of a subscription', () => {
+    const out = coverageOutlook(
+      [ent({ planType: 'monthly', sessionsTotal: null, validUntil: '2026-11-27' })],
+      '2026-10-29',
+    );
+    expect(out).toEqual({ kind: 'covered_until', date: '2026-11-27', daysLeft: 29 });
+  });
+
+  it('reports the longest-running subscription when two overlap', () => {
+    const out = coverageOutlook(
+      [
+        ent({ id: 1, planType: 'monthly', sessionsTotal: null, validUntil: '2026-11-10' }),
+        ent({ id: 2, planType: 'monthly', sessionsTotal: null, validUntil: '2026-12-20' }),
+      ],
+      '2026-10-29',
+    );
+    expect(out).toMatchObject({ kind: 'covered_until', date: '2026-12-20' });
+  });
+
+  it('counts remaining sessions across several cards', () => {
+    const out = coverageOutlook(
+      [
+        ent({ id: 1, sessionsTotal: 8, sessionsUsed: 6 }),
+        ent({ id: 2, sessionsTotal: 4, sessionsUsed: 1 }),
+      ],
+      '2026-10-29',
+    );
+    expect(out).toEqual({ kind: 'sessions_left', left: 5 });
+  });
+
+  it('prefers the subscription date over a session count', () => {
+    const out = coverageOutlook(
+      [
+        ent({ id: 1, sessionsTotal: 8, sessionsUsed: 0 }),
+        ent({ id: 2, planType: 'monthly', sessionsTotal: null, validUntil: '2026-11-27' }),
+      ],
+      '2026-10-29',
+    );
+    expect(out).toMatchObject({ kind: 'covered_until', date: '2026-11-27' });
+  });
+
+  it('comes due once an expired subscription is the only thing on file', () => {
+    const out = coverageOutlook(
+      [ent({ planType: 'monthly', sessionsTotal: null, validUntil: '2026-10-28' })],
+      '2026-10-29',
+    );
+    expect(out).toEqual({ kind: 'due_now' });
+  });
+
+  it('does not count an opening balance as coverage', () => {
+    const out = coverageOutlook(
+      [ent({ planType: 'opening_balance', sessionsTotal: 0, sessionsUsed: 0 })],
+      '2026-10-29',
+    );
+    expect(out).toEqual({ kind: 'due_now' });
   });
 });
 

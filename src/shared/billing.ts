@@ -1,4 +1,4 @@
-import { type IsoDate } from './dates';
+import { daysBetween, type IsoDate } from './dates';
 import type { Coverage, PurchaseStatus, PurchaseType } from './types';
 
 /**
@@ -95,6 +95,48 @@ export function pickCoverage(entitlements: Entitlement[], on: IsoDate): Coverage
     consumes: true,
     remainingAfter: Math.max(0, (pick.sessionsTotal ?? 0) - pick.sessionsUsed - 1),
   };
+}
+
+/**
+ * What a member's coverage looks like going forward — the "when is my next
+ * payment due" answer on the player's own screen.
+ *
+ * A subscription answers with a date, a session card answers with a count, and
+ * neither answers with "due now". Those are genuinely different answers, so
+ * they stay separate rather than being forced into one date.
+ */
+export type CoverageOutlook =
+  | { kind: 'covered_until'; date: IsoDate; daysLeft: number }
+  | { kind: 'sessions_left'; left: number }
+  | { kind: 'due_now' };
+
+export function coverageOutlook(entitlements: Entitlement[], on: IsoDate): CoverageOutlook {
+  const live = entitlements.filter((e) => isLive(e, on) && hasSessionsLeft(e));
+
+  // Prefer the subscription that runs longest: that is the real paid-through date.
+  const dated = live
+    .filter((e) => e.sessionsTotal == null && e.validUntil != null)
+    .sort((a, b) => (a.validUntil! < b.validUntil! ? 1 : -1));
+
+  const longest = dated[0];
+  if (longest?.validUntil) {
+    return {
+      kind: 'covered_until',
+      date: longest.validUntil,
+      daysLeft: daysBetween(on, longest.validUntil),
+    };
+  }
+
+  // An unlimited subscription with no expiry never comes due.
+  if (live.some((e) => e.sessionsTotal == null)) {
+    return { kind: 'covered_until', date: '9999-12-31', daysLeft: Number.MAX_SAFE_INTEGER };
+  }
+
+  const left = live
+    .filter((e) => e.sessionsTotal != null)
+    .reduce((sum, e) => sum + Math.max(0, (e.sessionsTotal ?? 0) - e.sessionsUsed), 0);
+
+  return left > 0 ? { kind: 'sessions_left', left } : { kind: 'due_now' };
 }
 
 /** Status a purchase should hold after `sessionsUsed` changes. */

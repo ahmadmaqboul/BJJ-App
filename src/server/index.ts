@@ -8,6 +8,7 @@ import memberRoutes from './routes/members';
 import sessionRoutes from './routes/sessions';
 import billingRoutes from './routes/billing';
 import promotionRoutes from './routes/promotions';
+import groupRoutes from './routes/groups';
 import meRoutes from './routes/me';
 import adminRoutes from './routes/admin';
 import { runNightlyMaintenance } from './cron';
@@ -24,6 +25,7 @@ app.use('/api/members/*', requireAuth);
 app.use('/api/sessions/*', requireAuth);
 app.use('/api/billing/*', requireAuth);
 app.use('/api/promotions/*', requireAuth);
+app.use('/api/groups/*', requireAuth);
 app.use('/api/me/*', requireAuth);
 app.use('/api/admin/*', requireAuth);
 
@@ -31,6 +33,7 @@ app.route('/api/members', memberRoutes);
 app.route('/api/sessions', sessionRoutes);
 app.route('/api/billing', billingRoutes);
 app.route('/api/promotions', promotionRoutes);
+app.route('/api/groups', groupRoutes);
 app.route('/api/me', meRoutes);
 app.route('/api/admin', adminRoutes);
 
