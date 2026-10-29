@@ -1,4 +1,5 @@
 import type { IsoDate } from './dates';
+import type { StatusReason } from './membership';
 
 export type Belt = 'white' | 'blue' | 'purple' | 'brown' | 'black';
 export const BELTS: Belt[] = ['white', 'blue', 'purple', 'brown', 'black'];
@@ -24,6 +25,10 @@ export interface Member {
   birthDate: IsoDate | null;
   joinDate: IsoDate;
   status: MemberStatus;
+  /** Why they are not active. Null while active. */
+  statusReason: StatusReason | null;
+  statusNote: string | null;
+  statusChangedOn: IsoDate | null;
   belt: Belt;
   stripes: number;
   lastPromotionDate: IsoDate | null;

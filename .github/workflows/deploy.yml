@@ -1,0 +1,56 @@
+name: Deploy
+
+# Pushing to main ships the app. Two repository secrets are required:
+#   CLOUDFLARE_API_TOKEN   — a token with "Edit Cloudflare Workers" + D1 edit
+#   CLOUDFLARE_ACCOUNT_ID  — from the Cloudflare dashboard sidebar
+#
+# Run it by hand from the Actions tab too (workflow_dispatch), which is handy
+# for applying a migration without pushing a code change.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Never let two deploys race: a half-applied migration is worse than a wait.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Catch a broken build before anything reaches production.
+      - name: Type-check and test
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+      # Migrations first: the new Worker may depend on a column the old schema
+      # does not have, and D1 migrations are append-only and idempotent.
+      - name: Apply database migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply jui-jitsu-db --remote
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

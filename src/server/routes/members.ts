@@ -3,10 +3,18 @@ import { HTTPException } from 'hono/http-exception';
 import { evaluateEligibility } from '../../shared/promotion';
 import { isIsoDate } from '../../shared/dates';
 import type { Belt, MemberStatus } from '../../shared/types';
+import {
+  STATUS_REASONS,
+  subscriptionStatusOf,
+  type StatusReason,
+  type SubscriptionState,
+} from '../../shared/membership';
 import type { AppBindings } from '../env';
 import { assertCanReadMember, audit, requireAdmin, requireStaff } from '../middleware';
 import {
+  activityFor,
   balancesFor,
+  entitlementsForMany,
   getMember,
   listMembers,
   loadRules,
@@ -22,20 +30,40 @@ const STATUSES: MemberStatus[] = ['active', 'inactive', 'paused'];
 members.get('/', requireStaff, async (c) => {
   const status = (c.req.query('status') ?? 'all') as MemberStatus | 'all';
   const search = c.req.query('q') ?? undefined;
+  const subFilter = c.req.query('sub') as SubscriptionState | 'all' | undefined;
 
   const list = await listMembers(c.env, {
     status: status === 'all' ? 'all' : status,
     search,
   });
 
-  const balances = await balancesFor(c.env);
-  const rules = await loadRules(c.env);
+  const ids = list.map((m) => m.id);
+  const [balances, rules, entitlements, activity] = await Promise.all([
+    balancesFor(c.env, ids),
+    loadRules(c.env),
+    entitlementsForMany(c.env, ids),
+    activityFor(c.env, ids),
+  ]);
   const asOf = c.get('today');
 
-  return c.json({
-    members: list.map((m) => ({
+  const rows = list.map((m) => {
+    const balance = balances.get(m.id) ?? {
+      chargedMinor: 0,
+      paidMinor: 0,
+      outstandingMinor: 0,
+    };
+    const act = activity.get(m.id) ?? { everPurchased: false, lastSeen: null };
+
+    return {
       ...m,
-      balance: balances.get(m.id) ?? { chargedMinor: 0, paidMinor: 0, outstandingMinor: 0 },
+      balance,
+      lastSeen: act.lastSeen,
+      // The second, independent status: what is paying for them right now.
+      subscription: subscriptionStatusOf(
+        entitlements.get(m.id) ?? [],
+        { everPurchased: act.everPurchased, outstandingMinor: balance.outstandingMinor },
+        asOf,
+      ),
       eligibility: rules[m.belt]
         ? evaluateEligibility(
             {
@@ -52,8 +80,15 @@ members.get('/', requireStaff, async (c) => {
             asOf,
           )
         : null,
-    })),
+    };
   });
+
+  const filtered =
+    subFilter && subFilter !== 'all'
+      ? rows.filter((r) => r.subscription.state === subFilter)
+      : rows;
+
+  return c.json({ members: filtered });
 });
 
 members.get('/:id', async (c) => {
@@ -132,11 +167,29 @@ members.get('/:id', async (c) => {
       .all(),
   ]);
 
+  const balance = balanceMap.get(id) ?? {
+    chargedMinor: 0,
+    paidMinor: 0,
+    outstandingMinor: 0,
+  };
+  const [entitlements, activity] = await Promise.all([
+    entitlementsForMany(c.env, [id]),
+    activityFor(c.env, [id]),
+  ]);
+  const act = activity.get(id) ?? { everPurchased: false, lastSeen: null };
+
   return c.json({
     member,
     eligibility,
     rule: rule ?? null,
-    balance: balanceMap.get(id) ?? { chargedMinor: 0, paidMinor: 0, outstandingMinor: 0 },
+    balance,
+    // The second status: what is paying for them right now, derived live.
+    subscription: subscriptionStatusOf(
+      entitlements.get(id) ?? [],
+      { everPurchased: act.everPurchased, outstandingMinor: balance.outstandingMinor },
+      asOf,
+    ),
+    lastSeen: act.lastSeen,
     promotions: promotions.results ?? [],
     attendance: recentAttendance.results ?? [],
     legacyMonthly: monthly.results ?? [],
@@ -295,22 +348,45 @@ members.patch('/:id', requireAdmin, async (c) => {
  * Status is the active/inactive switch, kept as its own endpoint because it is
  * the one member field the coach touches constantly.
  */
+/**
+ * Membership status, with why and since when.
+ *
+ * Nothing is deleted when a member goes inactive — their attendance, payments
+ * and belt history all stay. They simply come off the check-in roster and the
+ * promotion board. Going back to active clears the reason, since it no longer
+ * describes anything.
+ */
 members.post('/:id/status', requireStaff, async (c) => {
   const id = Number(c.req.param('id'));
-  const body = await readJson<{ status?: MemberStatus }>(c.req);
+  const body = await readJson<{
+    status: MemberStatus;
+    reason: StatusReason | null;
+    note: string | null;
+  }>(c.req);
+
   if (!body.status || !STATUSES.includes(body.status)) {
     throw new HTTPException(400, { message: 'bad_status' });
   }
+  if (body.reason != null && !STATUS_REASONS.includes(body.reason)) {
+    throw new HTTPException(400, { message: 'bad_reason' });
+  }
+
+  const goingActive = body.status === 'active';
+  const reason = goingActive ? null : (body.reason ?? null);
+  const note = goingActive ? null : (body.note?.trim() || null);
 
   const res = await c.env.DB.prepare(
-    `UPDATE members SET status = ?, status_changed_on = ?, updated_at = ? WHERE id = ?`,
+    `UPDATE members
+        SET status = ?, status_reason = ?, status_note = ?,
+            status_changed_on = ?, updated_at = ?
+      WHERE id = ?`,
   )
-    .bind(body.status, c.get('today'), new Date().toISOString(), id)
+    .bind(body.status, reason, note, c.get('today'), new Date().toISOString(), id)
     .run();
 
   if (!res.meta.changes) throw new HTTPException(404, { message: 'member_not_found' });
 
-  await audit(c, 'member.status', 'member', id, { status: body.status });
+  await audit(c, 'member.status', 'member', id, { status: body.status, reason });
   return c.json({ member: await getMember(c.env, id) });
 });
 

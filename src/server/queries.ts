@@ -1,4 +1,5 @@
 import type { Belt, Member, MemberStatus, PromotionRule, Role } from '../shared/types';
+import type { StatusReason } from '../shared/membership';
 import type { Entitlement } from '../shared/billing';
 import type { Env } from './env';
 
@@ -9,6 +10,7 @@ import type { Env } from './env';
  */
 const MEMBER_SELECT = `
   SELECT m.id, m.name_ar, m.name_en, m.phone, m.birth_date, m.join_date, m.status,
+         m.status_reason, m.status_note, m.status_changed_on,
          m.belt, m.stripes, m.last_promotion_date, m.legacy_attendance,
          m.classes_at_last_promotion, m.notes,
          m.legacy_attendance + COALESCE(att.cnt, 0) AS total_classes,
@@ -32,6 +34,9 @@ export interface MemberRow {
   birth_date: string | null;
   join_date: string;
   status: MemberStatus;
+  status_reason: StatusReason | null;
+  status_note: string | null;
+  status_changed_on: string | null;
   belt: Belt;
   stripes: number;
   last_promotion_date: string | null;
@@ -52,6 +57,9 @@ export function toMember(r: MemberRow): Member {
     birthDate: r.birth_date,
     joinDate: r.join_date,
     status: r.status,
+    statusReason: r.status_reason,
+    statusNote: r.status_note,
+    statusChangedOn: r.status_changed_on,
     belt: r.belt,
     stripes: r.stripes,
     lastPromotionDate: r.last_promotion_date,
@@ -235,6 +243,69 @@ export async function balancesFor(
       paidMinor: r.paid_minor ?? 0,
       outstandingMinor: (r.charged_minor ?? 0) - (r.paid_minor ?? 0),
     });
+  }
+  return map;
+}
+
+// ------------------------------------------------------ subscription status ---
+
+/**
+ * Everything the subscription half of a member's status needs, for many
+ * members at once: whether they have ever bought anything, and when they were
+ * last on the mat.
+ *
+ * "Last seen" merges the imported monthly totals with recorded attendance, so
+ * it is a month ('2026-01') for history carried over from the spreadsheet and
+ * a full date for anything the app recorded itself. Members whose entire
+ * history is in the sheet's undated pre-2026 bucket get the sentinel
+ * '0000-00', which sorts below every real month so MAX() never prefers it —
+ * without it they would read as having never trained at all.
+ */
+export interface MemberActivity {
+  everPurchased: boolean;
+  lastSeen: string | null;
+}
+
+export async function activityFor(
+  env: Env,
+  memberIds?: number[],
+): Promise<Map<number, MemberActivity>> {
+  const scoped = memberIds?.length ? memberIds : null;
+  const inList = scoped ? `WHERE member_id IN (${scoped.map(() => '?').join(',')})` : '';
+
+  const [purchased, seen] = await Promise.all([
+    env.DB.prepare(
+      `SELECT member_id, COUNT(*) AS n FROM purchases ${inList} GROUP BY member_id`,
+    )
+      .bind(...(scoped ?? []))
+      .all<{ member_id: number; n: number }>(),
+    env.DB.prepare(
+      `SELECT member_id, MAX(period) AS last_seen FROM (
+         SELECT member_id, printf('%04d-%02d', year, month) AS period
+           FROM legacy_monthly_attendance
+          WHERE year > 0 AND classes > 0
+         UNION ALL
+         SELECT member_id, '0000-00' AS period
+           FROM legacy_monthly_attendance
+          WHERE year = 0 AND classes > 0
+         UNION ALL
+         SELECT a.member_id, cs.date AS period
+           FROM attendance a JOIN class_sessions cs ON cs.id = a.session_id
+          WHERE a.status IN ('present','late')
+       ) ${inList} GROUP BY member_id`,
+    )
+      .bind(...(scoped ?? []))
+      .all<{ member_id: number; last_seen: string | null }>(),
+  ]);
+
+  const map = new Map<number, MemberActivity>();
+  for (const r of purchased.results ?? []) {
+    map.set(r.member_id, { everPurchased: r.n > 0, lastSeen: null });
+  }
+  for (const r of seen.results ?? []) {
+    const existing = map.get(r.member_id) ?? { everPurchased: false, lastSeen: null };
+    existing.lastSeen = r.last_seen;
+    map.set(r.member_id, existing);
   }
   return map;
 }

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Belt, Coverage, MemberStatus, PaymentMethod, PlanType } from '../shared/types';
 import type { PromotionStatus } from '../shared/promotion';
+import type { StatusReason, SubscriptionState } from '../shared/membership';
 
 /**
  * Arabic is the default and the source of truth for wording — the team's data,
@@ -369,6 +370,30 @@ const ar = {
   'promo.toStripes': 'عدد الخطوط',
   'promo.date': 'تاريخ الترقية',
   'promo.multiStripe': 'بتقدر ترقّيه أكثر من خط بنفس الوقت.',
+
+  'reason.travel': 'مسافر',
+  'reason.injury': 'إصابة',
+  'reason.stopped': 'بطّل',
+  'reason.study': 'دراسة أو شغل',
+  'reason.cost': 'ظروف مادية',
+  'reason.other': 'سبب آخر',
+
+  'sub.subscribed': 'مشترك',
+  'sub.ending_soon': 'قارب ينتهي',
+  'sub.expired': 'اشتراك منتهي',
+  'sub.never': 'ما اشترك',
+  'sub.title': 'حالة الاشتراك',
+  'sub.all': 'كل الاشتراكات',
+
+  'members.membership': 'حالة العضوية',
+  'members.changeStatus': 'تغيير الحالة',
+  'members.reason': 'السبب',
+  'members.statusNote': 'ملاحظة',
+  'members.statusSince': 'من {date}',
+  'members.lastSeen': 'آخر حضور: {date}',
+  'members.neverSeen': 'ما حضر ولا حصة',
+  'members.seenEarlier': 'آخر حضور: قبل 2026',
+  'members.dataKept': 'كل داتا اللاعب بتضل محفوظة — بس بينشال من تسجيل الحضور ولوحة الترقيات.',
 } as const;
 
 type Key = keyof typeof ar;
@@ -736,6 +761,30 @@ const en: Record<Key, string> = {
   'promo.toStripes': 'Stripes',
   'promo.date': 'Promotion date',
   'promo.multiStripe': 'You can award more than one stripe at a time.',
+
+  'reason.travel': 'Travelling',
+  'reason.injury': 'Injured',
+  'reason.stopped': 'Quit',
+  'reason.study': 'Study or work',
+  'reason.cost': 'Cost',
+  'reason.other': 'Other reason',
+
+  'sub.subscribed': 'Subscribed',
+  'sub.ending_soon': 'Ending soon',
+  'sub.expired': 'Expired',
+  'sub.never': 'Never subscribed',
+  'sub.title': 'Subscription',
+  'sub.all': 'All subscriptions',
+
+  'members.membership': 'Membership',
+  'members.changeStatus': 'Change status',
+  'members.reason': 'Reason',
+  'members.statusNote': 'Note',
+  'members.statusSince': 'since {date}',
+  'members.lastSeen': 'Last seen: {date}',
+  'members.neverSeen': 'Never attended',
+  'members.seenEarlier': 'Last seen: before 2026',
+  'members.dataKept': 'All of their data is kept — they only come off the check-in roster and the promotion board.',
 };
 
 export type Lang = 'ar' | 'en';
@@ -816,3 +865,5 @@ export const coverageKey = (c: Coverage) => `coverage.${c}` as Key;
 export const methodKey = (m: PaymentMethod) => `method.${m}` as Key;
 export const planTypeKey = (p: PlanType) => `planType.${p}` as Key;
 export const promoStatusKey = (s: PromotionStatus) => `promoStatus.${s}` as Key;
+export const reasonKey = (r: StatusReason) => `reason.${r}` as Key;
+export const subKey = (s: SubscriptionState) => `sub.${s}` as Key;

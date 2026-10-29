@@ -4,7 +4,11 @@ import type { Belt, Member, MemberStatus } from '../../shared/types';
 import type { Eligibility } from '../../shared/promotion';
 import { today } from '../../shared/dates';
 import { BELTS } from '../../shared/types';
-import { beltKey, promoStatusKey, statusKey, useT } from '../i18n';
+import { beltKey, promoStatusKey, statusKey, subKey, useT } from '../i18n';
+import type {
+  SubscriptionState,
+  SubscriptionStatus,
+} from '../../shared/membership';
 import { api, errorKey } from '../lib/api';
 import { useApi, useDebounced } from '../lib/hooks';
 import { money } from '../lib/format';
@@ -23,6 +27,7 @@ import {
   Sheet,
   cx,
   useToast,
+  type Tone,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { isAdmin, useAuth } from '../auth';
@@ -30,7 +35,18 @@ import { isAdmin, useAuth } from '../auth';
 interface MemberRow extends Member {
   balance: { chargedMinor: number; paidMinor: number; outstandingMinor: number };
   eligibility: Eligibility | null;
+  subscription: SubscriptionStatus;
+  /** A month for imported history, a full date for recorded attendance. */
+  lastSeen: string | null;
 }
+
+/** Subscription state → badge tone. Always paired with its label. */
+const SUB_TONE: Record<SubscriptionState, Tone> = {
+  subscribed: 'good',
+  ending_soon: 'warning',
+  expired: 'critical',
+  never: 'neutral',
+};
 
 type Filter = 'active' | 'inactive' | 'paused' | 'all';
 
@@ -115,6 +131,12 @@ export function Members() {
                     <span className="tnum text-xs text-ink-muted">
                       {m.totalClasses} {t('members.classes')}
                     </span>
+                    <Badge
+                      tone={SUB_TONE[m.subscription.state]}
+                      icon={m.subscription.state === 'subscribed' ? 'check' : 'coins'}
+                    >
+                      {t(subKey(m.subscription.state))}
+                    </Badge>
                     {m.balance.outstandingMinor > 0 && (
                       <Badge tone="warning" icon="coins">
                         {money(m.balance.outstandingMinor)}

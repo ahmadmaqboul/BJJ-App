@@ -5,7 +5,13 @@ import type { Eligibility } from '../../shared/promotion';
 import { BELTS } from '../../shared/types';
 import { parseMoney } from '../../shared/billing';
 import { today } from '../../shared/dates';
-import { beltKey, methodKey, promoStatusKey, statusKey, useLang, useT } from '../i18n';
+import { beltKey, methodKey, promoStatusKey, reasonKey, statusKey, subKey, useLang, useT } from '../i18n';
+import {
+  STATUS_REASONS,
+  type StatusReason,
+  type SubscriptionState,
+  type SubscriptionStatus,
+} from '../../shared/membership';
 import { api, errorKey } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { formatDate, money } from '../lib/format';
@@ -39,6 +45,8 @@ interface Profile {
   eligibility: Eligibility | null;
   rule: { maxStripes: number; nextBelt: Belt | null } | null;
   balance: { chargedMinor: number; paidMinor: number; outstandingMinor: number };
+  subscription: SubscriptionStatus;
+  lastSeen: string | null;
   promotions: {
     id: number;
     from_belt: Belt | null;
@@ -183,6 +191,14 @@ export function MemberProfile() {
           </div>
         </dl>
       </Card>
+
+      <StatusCard
+        member={member}
+        subscription={data.subscription}
+        lastSeen={data.lastSeen}
+        canEdit={admin}
+        onChanged={reload}
+      />
 
       <Segmented
         value={tab}
@@ -1132,6 +1148,207 @@ function LoginSheet({
             ))}
           </Select>
         </Field>
+      </div>
+    </Sheet>
+  );
+}
+
+
+const SUB_TONE: Record<SubscriptionState, Tone> = {
+  subscribed: 'good',
+  ending_soon: 'warning',
+  expired: 'critical',
+  never: 'neutral',
+};
+
+const MEMBERSHIP_TONE: Record<MemberStatus, Tone> = {
+  active: 'good',
+  inactive: 'neutral',
+  paused: 'warning',
+};
+
+/**
+ * The two statuses side by side. They answer different questions and often
+ * disagree — someone can be off the mat with a subscription still running, or
+ * training every week on a lapsed one — so neither is folded into the other.
+ */
+function StatusCard({
+  member,
+  subscription,
+  lastSeen,
+  canEdit,
+  onChanged,
+}: {
+  member: Member;
+  subscription: SubscriptionStatus;
+  lastSeen: string | null;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const { lang } = useLang();
+  const [editing, setEditing] = useState(false);
+
+  // '0000-00' means their whole history is the sheet's undated pre-2026
+  // bucket; a 7-character value is a month; anything longer is a real date.
+  const seenLabel =
+    lastSeen === null
+      ? t('members.neverSeen')
+      : lastSeen === '0000-00'
+        ? t('members.seenEarlier')
+        : t('members.lastSeen', {
+            date: lastSeen.length === 7 ? lastSeen : formatDate(lastSeen, lang),
+          });
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <SectionTitle>{t('members.membership')}</SectionTitle>
+        {canEdit && (
+          <Button size="sm" icon="edit" onClick={() => setEditing(true)}>
+            {t('members.changeStatus')}
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          tone={MEMBERSHIP_TONE[member.status]}
+          icon={member.status === 'active' ? 'check' : 'minus'}
+        >
+          {t(statusKey(member.status))}
+        </Badge>
+        {member.statusReason && (
+          <Badge tone="neutral">{t(reasonKey(member.statusReason))}</Badge>
+        )}
+        {member.statusChangedOn && member.status !== 'active' && (
+          <span className="text-xs text-ink-muted">
+            {t('members.statusSince', { date: formatDate(member.statusChangedOn, lang) })}
+          </span>
+        )}
+      </div>
+
+      {member.statusNote && (
+        <p className="mt-2 text-xs text-ink-soft">{member.statusNote}</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
+        <span className="text-xs text-ink-muted">{t('sub.title')}:</span>
+        <Badge
+          tone={SUB_TONE[subscription.state]}
+          icon={subscription.state === 'subscribed' ? 'check' : 'coins'}
+        >
+          {t(subKey(subscription.state))}
+        </Badge>
+        {subscription.owesMinor > 0 && (
+          <Badge tone="warning" icon="coins">
+            {money(subscription.owesMinor)}
+          </Badge>
+        )}
+      </div>
+
+      <p className="mt-2 text-xs text-ink-muted">{seenLabel}</p>
+
+      {editing && (
+        <StatusSheet
+          member={member}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function StatusSheet({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: Member;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const [status, setStatus] = useState<MemberStatus>(member.status);
+  const [reason, setReason] = useState<StatusReason | ''>(member.statusReason ?? '');
+  const [note, setNote] = useState(member.statusNote ?? '');
+  const [busy, setBusy] = useState(false);
+
+  // A reason only describes someone who is off the mat.
+  const needsReason = status !== 'active';
+
+  async function save() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/api/members/${member.id}/status`, {
+        status,
+        reason: needsReason && reason ? reason : null,
+        note: needsReason ? note || null : null,
+      });
+      toast.show(t('me.profileSaved'), 'good');
+      onSaved();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      toast.show(t(key as 'err.generic', vars), 'warning');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={t('members.changeStatus')}
+      footer={
+        <Button variant="primary" size="lg" onClick={save} disabled={busy}>
+          {busy ? t('common.saving') : t('common.save')}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          {(['active', 'inactive', 'paused'] as MemberStatus[]).map((s) => (
+            <Button
+              key={s}
+              variant={status === s ? 'primary' : 'secondary'}
+              onClick={() => setStatus(s)}
+            >
+              {t(statusKey(s))}
+            </Button>
+          ))}
+        </div>
+
+        <p className="rounded-xl2 bg-series-tint px-3 py-2 text-xs text-ink">
+          {t('members.dataKept')}
+        </p>
+
+        {needsReason && (
+          <>
+            <Field label={t('members.reason')}>
+              <Select
+                value={reason}
+                onChange={(e) => setReason(e.target.value as StatusReason | '')}
+              >
+                <option value="">{t('common.none')}</option>
+                {STATUS_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {t(reasonKey(r))}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t('members.statusNote')} hint={t('common.optional')}>
+              <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+          </>
+        )}
       </div>
     </Sheet>
   );
