@@ -4,7 +4,7 @@ import { isIsoDate } from '../../shared/dates';
 import { pickCoverage, settleStatus, type Entitlement } from '../../shared/billing';
 import type { AttendanceStatus, ClassType, Coverage } from '../../shared/types';
 import type { AppBindings } from '../env';
-import { audit, requireStaff } from '../middleware';
+import { audit, requireAdmin, requireStaff } from '../middleware';
 import { balancesFor, entitlementsForMany, listMembers, loadSettings } from '../queries';
 import { readJson } from '../http';
 
@@ -213,6 +213,9 @@ sessions.get('/:id', async (c) => {
 sessions.patch('/:id', async (c) => {
   const id = Number(c.req.param('id'));
   const body = await readJson<{
+    date?: string;
+    classType?: ClassType;
+    groupId?: number | null;
     techniqueTitle?: string | null;
     techniqueNotes?: string | null;
     coachMemberId?: number | null;
@@ -227,6 +230,25 @@ sessions.patch('/:id', async (c) => {
     binds.push(v);
   };
 
+  // Date, type and group were previously unchangeable, which made a class
+  // opened on the wrong day or against the wrong group impossible to correct.
+  if (body.date !== undefined) {
+    if (!isIsoDate(body.date)) throw new HTTPException(400, { message: 'bad_date' });
+    put('date', body.date);
+  }
+  if (body.classType !== undefined) {
+    if (!CLASS_TYPES.includes(body.classType)) throw new HTTPException(400, { message: 'bad_type' });
+    put('class_type', body.classType);
+  }
+  if (body.groupId !== undefined) {
+    if (body.groupId !== null) {
+      const group = await c.env.DB.prepare(`SELECT id FROM training_groups WHERE id = ?`)
+        .bind(body.groupId)
+        .first();
+      if (!group) throw new HTTPException(404, { message: 'group_not_found' });
+    }
+    put('group_id', body.groupId);
+  }
   if (body.techniqueTitle !== undefined) put('technique_title', body.techniqueTitle?.trim() || null);
   if (body.techniqueNotes !== undefined) put('technique_notes', body.techniqueNotes?.trim() || null);
   if (body.coachMemberId !== undefined) put('coach_member_id', body.coachMemberId);
@@ -423,5 +445,60 @@ export async function resettleMemberPurchases(
   }
   if (updates.length) await env.DB.batch(updates);
 }
+
+/**
+ * Deletes a class — for one opened by mistake.
+ *
+ * Attendance rows cascade away with it, but the paid sessions those check-ins
+ * consumed would vanish with them, quietly costing members classes they had
+ * bought. So every package or single session this class burned is returned to
+ * its purchase first, and the affected purchases are re-settled afterwards (a
+ * card that had been exhausted becomes active again).
+ */
+sessions.delete('/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+
+  const session = await c.env.DB.prepare(`SELECT id, date FROM class_sessions WHERE id = ?`)
+    .bind(id)
+    .first<{ id: number; date: string }>();
+  if (!session) throw new HTTPException(404, { message: 'session_not_found' });
+
+  // Only present/late check-ins ever consumed anything.
+  const { results: consumed } = await c.env.DB.prepare(
+    `SELECT member_id, purchase_id FROM attendance
+      WHERE session_id = ?
+        AND status IN ('present','late')
+        AND purchase_id IS NOT NULL
+        AND coverage IN ('package','single')`,
+  )
+    .bind(id)
+    .all<{ member_id: number; purchase_id: number }>();
+
+  const refunds = new Map<number, number>();
+  for (const row of consumed ?? []) {
+    refunds.set(row.purchase_id, (refunds.get(row.purchase_id) ?? 0) + 1);
+  }
+
+  const statements: D1PreparedStatement[] = [];
+  for (const [purchaseId, n] of refunds) {
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE purchases SET sessions_used = MAX(0, sessions_used - ?) WHERE id = ?`,
+      ).bind(n, purchaseId),
+    );
+  }
+  statements.push(c.env.DB.prepare(`DELETE FROM class_sessions WHERE id = ?`).bind(id));
+  await c.env.DB.batch(statements);
+
+  const touched = [...new Set((consumed ?? []).map((r) => r.member_id))];
+  if (touched.length) await resettleMemberPurchases(c.env, touched, c.get('today'));
+
+  await audit(c, 'session.delete', 'class_session', id, {
+    date: session.date,
+    sessionsReturned: [...refunds.values()].reduce((a, b) => a + b, 0),
+  });
+
+  return c.json({ ok: true, sessionsReturned: [...refunds.values()].reduce((a, b) => a + b, 0) });
+});
 
 export default sessions;

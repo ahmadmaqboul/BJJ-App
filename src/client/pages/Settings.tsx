@@ -47,6 +47,14 @@ interface Rule {
   nextBelt: Belt | null;
 }
 
+type SettingsTab = 'account' | 'club' | 'plans' | 'promotions';
+
+/**
+ * Settings is tabbed rather than one long scroll: the club's details, its
+ * prices and its promotion rules are each edited rarely and independently, and
+ * stacking them meant scrolling past two of them to reach the third. A player
+ * only ever has the account tab, so they see no tab bar at all.
+ */
 export function Settings() {
   const t = useT();
   const { lang, setLang } = useLang();
@@ -55,60 +63,80 @@ export function Settings() {
   const staff = isStaff(user);
   const admin = isAdmin(user);
 
+  const [tab, setTab] = useState<SettingsTab>('account');
   const [pinOpen, setPinOpen] = useState(false);
+
+  const active = staff ? tab : 'account';
 
   return (
     <div className="space-y-5">
       <h1 className="text-lg font-semibold text-ink">{t('settings.title')}</h1>
 
-      <section>
-        <SectionTitle>{t('settings.language')}</SectionTitle>
-        <Segmented<Lang>
-          value={lang}
-          onChange={setLang}
+      {staff && (
+        <Segmented<SettingsTab>
+          value={tab}
+          onChange={setTab}
           options={[
-            { value: 'ar', label: 'العربية' },
-            { value: 'en', label: 'English' },
+            { value: 'account', label: t('settings.tab.account') },
+            { value: 'club', label: t('settings.tab.club') },
+            { value: 'plans', label: t('settings.tab.plans') },
+            { value: 'promotions', label: t('settings.tab.promotions') },
           ]}
         />
-      </section>
+      )}
 
-      <section>
-        <SectionTitle>{t('settings.theme')}</SectionTitle>
-        <Segmented<Theme>
-          value={theme}
-          onChange={setTheme}
-          options={[
-            { value: 'system', label: t('settings.theme.system') },
-            { value: 'light', label: t('settings.theme.light') },
-            { value: 'dark', label: t('settings.theme.dark') },
-          ]}
-        />
-      </section>
+      {active === 'account' && (
+        <div className="space-y-5">
+          <section>
+            <SectionTitle>{t('settings.language')}</SectionTitle>
+            <Segmented<Lang>
+              value={lang}
+              onChange={setLang}
+              options={[
+                { value: 'ar', label: 'العربية' },
+                { value: 'en', label: 'English' },
+              ]}
+            />
+          </section>
 
-      <section>
-        <SectionTitle>{t('login.pin')}</SectionTitle>
-        <Card className="p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="tnum text-sm text-ink-soft" dir="ltr">
-              {user?.login}
-            </p>
-            <Button size="sm" icon="key" onClick={() => setPinOpen(true)}>
-              {t('me.changePin')}
+          <section>
+            <SectionTitle>{t('settings.theme')}</SectionTitle>
+            <Segmented<Theme>
+              value={theme}
+              onChange={setTheme}
+              options={[
+                { value: 'system', label: t('settings.theme.system') },
+                { value: 'light', label: t('settings.theme.light') },
+                { value: 'dark', label: t('settings.theme.dark') },
+              ]}
+            />
+          </section>
+
+          <section>
+            <SectionTitle>{t('login.pin')}</SectionTitle>
+            <Card className="p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="tnum text-sm text-ink-soft" dir="ltr">
+                  {user?.login}
+                </p>
+                <Button size="sm" icon="key" onClick={() => setPinOpen(true)}>
+                  {t('me.changePin')}
+                </Button>
+              </div>
+            </Card>
+          </section>
+
+          <section className="border-t border-hairline pt-4">
+            <Button variant="ghost" icon="logout" onClick={() => void signOut()}>
+              {t('settings.logout')}
             </Button>
-          </div>
-        </Card>
-      </section>
+          </section>
+        </div>
+      )}
 
-      {staff && <TeamSettings />}
-      {staff && <PlansSection editable={admin} />}
-      {staff && <RulesSection editable={admin} />}
-
-      <section className="border-t border-hairline pt-4">
-        <Button variant="ghost" icon="logout" onClick={() => void signOut()}>
-          {t('settings.logout')}
-        </Button>
-      </section>
+      {active === 'club' && staff && <TeamSettings />}
+      {active === 'plans' && staff && <PlansSection editable={admin} />}
+      {active === 'promotions' && staff && <RulesSection editable={admin} />}
 
       {pinOpen && (
         <Sheet open onClose={() => setPinOpen(false)} title={t('me.changePin')}>

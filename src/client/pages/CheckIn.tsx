@@ -15,6 +15,7 @@ import {
   Input,
   LoadingBlock,
   Select,
+  ConfirmSheet,
   Sheet,
   Switch,
   Textarea,
@@ -178,7 +179,7 @@ export function CheckIn() {
           </p>
         </div>
         <Button size="sm" icon="edit" onClick={() => setEditMeta(true)}>
-          {t('classes.technique')}
+          {t('classes.edit')}
         </Button>
       </div>
 
@@ -333,15 +334,14 @@ export function CheckIn() {
       )}
 
       {editMeta && (
-        <TechniqueSheet
-          sessionId={session.id}
-          title={session.technique_title ?? ''}
-          notes={session.technique_notes ?? ''}
+        <EditClassSheet
+          session={session}
           onClose={() => setEditMeta(false)}
           onSaved={() => {
             setEditMeta(false);
             detail.reload();
           }}
+          onDeleted={() => nav('/classes')}
         />
       )}
     </div>
@@ -453,30 +453,47 @@ function MemberSheet({
   );
 }
 
-function TechniqueSheet({
-  sessionId,
-  title,
-  notes,
+/**
+ * Full class editor: every field a class has, plus deleting one opened by
+ * mistake. Previously only the technique and notes could be changed, so a
+ * class created on the wrong day or against the wrong group was stuck.
+ */
+function EditClassSheet({
+  session,
   onClose,
   onSaved,
+  onDeleted,
 }: {
-  sessionId: number;
-  title: string;
-  notes: string;
+  session: SessionDetail['session'];
   onClose: () => void;
   onSaved: () => void;
+  onDeleted: () => void;
 }) {
   const t = useT();
   const toast = useToast();
-  const [techniqueTitle, setTitle] = useState(title);
-  const [techniqueNotes, setNotes] = useState(notes);
+  const groups = useApi<{ groups: { id: number; name_ar: string; active: number }[] }>('/api/groups');
+
+  const [date, setDate] = useState(session.date);
+  const [startTime, setStartTime] = useState(session.start_time ?? '');
+  const [classType, setClassType] = useState<ClassType>(session.class_type);
+  const [groupId, setGroupId] = useState(session.group_id ? String(session.group_id) : '');
+  const [techniqueTitle, setTitle] = useState(session.technique_title ?? '');
+  const [techniqueNotes, setNotes] = useState(session.technique_notes ?? '');
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function save() {
     if (busy) return;
     setBusy(true);
     try {
-      await api.patch(`/api/sessions/${sessionId}`, { techniqueTitle, techniqueNotes });
+      await api.patch(`/api/sessions/${session.id}`, {
+        date,
+        startTime: startTime || null,
+        classType,
+        groupId: groupId ? Number(groupId) : null,
+        techniqueTitle,
+        techniqueNotes,
+      });
       onSaved();
     } catch (err) {
       const { key, vars } = errorKey(err);
@@ -486,18 +503,102 @@ function TechniqueSheet({
     }
   }
 
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await api.del<{ sessionsReturned: number }>(`/api/sessions/${session.id}`);
+      toast.show(
+        res.sessionsReturned > 0
+          ? t('classes.sessionsReturned', { n: res.sessionsReturned })
+          : t('classes.deleted'),
+        'good',
+      );
+      onDeleted();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      toast.show(t(key as 'err.generic', vars), 'warning');
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (confirmDelete) {
+    return (
+      <ConfirmSheet
+        open
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={remove}
+        title={t('classes.delete')}
+        body={
+          <div className="space-y-2">
+            <p>{t('classes.deleteConfirm')}</p>
+            <p className="text-ink">{t('classes.deleteReturns')}</p>
+          </div>
+        }
+        confirmLabel={t('common.delete')}
+        busy={busy}
+      />
+    );
+  }
+
+  const activeGroups = (groups.data?.groups ?? []).filter((g) => g.active);
+
   return (
     <Sheet
       open
       onClose={onClose}
-      title={t('classes.technique')}
+      title={t('classes.edit')}
       footer={
-        <Button variant="primary" size="lg" onClick={save} disabled={busy}>
-          {busy ? t('common.saving') : t('common.save')}
-        </Button>
+        <div className="space-y-2">
+          <Button variant="primary" size="lg" onClick={save} disabled={busy}>
+            {busy ? t('common.saving') : t('common.save')}
+          </Button>
+          <Button variant="ghost" size="lg" icon="trash" onClick={() => setConfirmDelete(true)}>
+            {t('classes.delete')}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('classes.date')}>
+            <Input type="date" dir="ltr" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label={t('classes.time')}>
+            <Input
+              type="time"
+              dir="ltr"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
+          </Field>
+        </div>
+
+        <Field label={t('classes.type')}>
+          <Select value={classType} onChange={(e) => setClassType(e.target.value as ClassType)}>
+            {(['gi', 'nogi', 'open_mat', 'kids', 'seminar'] as ClassType[]).map((ct) => (
+              <option key={ct} value={ct}>
+                {t(`classType.${ct}` as 'classType.gi')}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        {activeGroups.length > 0 && (
+          <Field label={t('groups.title')} hint={t('common.optional')}>
+            <Select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              <option value="">{t('groups.none')}</option>
+              {activeGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name_ar}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+
         <Field label={t('classes.technique')}>
           <Input
             value={techniqueTitle}
