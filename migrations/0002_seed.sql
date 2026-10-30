@@ -49,7 +49,7 @@ INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (11, 'محمد دويكات', NULL, '2026-10-04', 'active', 'white', 1, '2026-10-04', 52, 45, 'آخر دفعة في الشيت: 2026-10-04');
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (12, 'علي حموضة', NULL, '2024-09-01', 'active', 'purple', 0, '2024-09-01', 2, 0, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (13, 'علي الفارس', NULL, '2026-02-10', 'inactive', 'white', 0, '2026-02-10', 5, 0, NULL);
-INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (14, 'حسن حجاوي', NULL, '2026-04-07', 'active', 'white', 0, '2026-04-07', 9, 0, 'رصيد مدور من الشيت: باقي بحسابه ٦٠ ش');
+INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (14, 'حسن حجاوي', NULL, '2026-04-07', 'active', 'white', 0, '2026-04-07', 9, 0, NULL);
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (15, 'محمد ريحان', NULL, '2026-04-12', 'active', 'white', 0, '2026-04-12', 26, 6, 'آخر دفعة في الشيت: 2026-10-04');
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (16, 'غالب ابو سير', NULL, '2026-10-04', 'active', 'white', 1, '2026-10-04', 52, 44, 'آخر دفعة في الشيت: 2026-10-20');
 INSERT INTO members (id, name_ar, phone, join_date, status, belt, stripes, last_promotion_date, legacy_attendance, classes_at_last_promotion, notes) VALUES (17, 'زيد', NULL, '2026-04-21', 'active', 'white', 0, '2026-04-21', 6, 2, NULL);
@@ -203,7 +203,25 @@ INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, class
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (24, 'white', 0, 'initial', '2026-10-18', 3, 'مستورد من شيت الترقيات');
 INSERT INTO promotions (member_id, to_belt, to_stripes, kind, promoted_on, classes_at_promotion, note) VALUES (25, 'white', 0, 'initial', '2026-10-28', 1, 'مستورد من شيت الترقيات');
 
-------------------------------------------------------- opening balances ---
--- Free-text balance notes from the sheet, turned into real money owed.
-INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (14, NULL, 'رصيد سابق', 'opening_balance', 6000, 'ILS', 0, 0, '2026-10-29', NULL, 'active', 'رصيد مدور من الشيت: باقي بحسابه ٦٠ ش');
+--------------------------------------------------- carried-over credit ---
+-- Credit the member already holds, NOT a debt: a payment with nothing
+-- charged against it, so the balance reads negative until it is used up.
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (14, NULL, 6000, 'ILS', '2026-10-29', 'cash', 'رصيد مدوّر من الشيت: باقي بحسابه ٦٠ ش');
+
+----------------------------------------- subscriptions from the sheet ---
+-- 6 members had a payment date. Amount assumed from the monthly
+-- plan because the sheet recorded only the date — check these once the
+-- real price is set in Settings → Plans.
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (4, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-15', '2026-11-13', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (4, last_insert_rowid(), 15000, 'ILS', '2026-10-15', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (9, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-04', '2026-11-02', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (9, last_insert_rowid(), 15000, 'ILS', '2026-10-04', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (11, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-04', '2026-11-02', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (11, last_insert_rowid(), 15000, 'ILS', '2026-10-04', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (15, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-04', '2026-11-02', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (15, last_insert_rowid(), 15000, 'ILS', '2026-10-04', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (16, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-20', '2026-11-18', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (16, last_insert_rowid(), 15000, 'ILS', '2026-10-20', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (19, 1, 'اشتراك شهري', 'monthly', 15000, 'ILS', NULL, 0, '2026-10-16', '2026-11-14', 'active', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
+INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) VALUES (19, last_insert_rowid(), 15000, 'ILS', '2026-10-16', 'cash', 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية');
 

@@ -137,11 +137,15 @@ export function Members() {
                     >
                       {t(subKey(m.subscription.state))}
                     </Badge>
-                    {m.balance.outstandingMinor > 0 && (
+                    {m.balance.outstandingMinor > 0 ? (
                       <Badge tone="warning" icon="coins">
                         {money(m.balance.outstandingMinor)}
                       </Badge>
-                    )}
+                    ) : m.balance.outstandingMinor < 0 ? (
+                      <Badge tone="good" icon="coins">
+                        {t('pay.creditShort')} {money(-m.balance.outstandingMinor)}
+                      </Badge>
+                    ) : null}
                     {m.eligibility &&
                       (m.eligibility.status === 'due' || m.eligibility.status === 'overdue') && (
                         <Badge

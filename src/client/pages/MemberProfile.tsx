@@ -179,14 +179,16 @@ export function MemberProfile() {
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-ink-muted">{t('pay.outstanding')}</dt>
+            <dt className="text-xs text-ink-muted">
+              {balance.outstandingMinor < 0 ? t('pay.creditShort') : t('pay.outstanding')}
+            </dt>
             <dd
               className={cx(
                 'mt-0.5 text-lg font-semibold',
                 balance.outstandingMinor > 0 ? 'text-ink' : 'text-ink-soft',
               )}
             >
-              {money(balance.outstandingMinor)}
+              {money(Math.abs(balance.outstandingMinor))}
             </dd>
           </div>
         </dl>
@@ -1240,11 +1242,15 @@ function StatusCard({
         >
           {t(subKey(subscription.state))}
         </Badge>
-        {subscription.owesMinor > 0 && (
+        {subscription.owesMinor > 0 ? (
           <Badge tone="warning" icon="coins">
             {money(subscription.owesMinor)}
           </Badge>
-        )}
+        ) : subscription.owesMinor < 0 ? (
+          <Badge tone="good" icon="coins">
+            {t('pay.creditShort')} {money(-subscription.owesMinor)}
+          </Badge>
+        ) : null}
       </div>
 
       <p className="mt-2 text-xs text-ink-muted">{seenLabel}</p>

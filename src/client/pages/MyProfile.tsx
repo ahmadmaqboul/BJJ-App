@@ -195,7 +195,9 @@ export function MyProfile() {
           >
             {balance.outstandingMinor > 0
               ? t('me.owes', { amount: money(balance.outstandingMinor) })
-              : t('me.clear')}
+              : balance.outstandingMinor < 0
+                ? t('me.credit', { amount: money(-balance.outstandingMinor) })
+                : t('me.clear')}
           </p>
           <Badge
             tone={data.currentCoverage.coverage === 'uncovered' ? 'warning' : 'good'}

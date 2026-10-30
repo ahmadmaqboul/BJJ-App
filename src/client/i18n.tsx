@@ -165,6 +165,8 @@ const ar = {
   'pay.cancel': 'إلغاء الاشتراك',
   'pay.cancelConfirm': 'إلغاء هذا الاشتراك؟ الحصص المرتبطة به ترجع غير مدفوعة.',
   'pay.settled': 'ما في مبالغ متبقية',
+  'pay.credit': 'رصيد له {amount}',
+  'pay.creditShort': 'رصيد له',
   'pay.uncoveredClasses': '{n} حصة غير مدفوعة',
   'pay.noOutstanding': 'كل اللاعبين مسدّدين.',
   'pay.backfilled': 'تمت تغطية {n} حصة سابقة',
@@ -255,6 +257,7 @@ const ar = {
   'me.noTechniques': 'ما في تكنيكات مسجّلة بعد.',
   'me.owes': 'عليك {amount}',
   'me.clear': 'حسابك مسدّد',
+  'me.credit': 'إلك رصيد {amount} عند النادي',
   'me.classesTotal': 'إجمالي الحصص',
   'me.sinceLastPromotion': 'منذ آخر ترقية',
 
@@ -555,6 +558,8 @@ const en: Record<Key, string> = {
   'pay.cancel': 'Cancel plan',
   'pay.cancelConfirm': 'Cancel this plan? Classes it paid for go back to unpaid.',
   'pay.settled': 'Nothing outstanding',
+  'pay.credit': '{amount} in credit',
+  'pay.creditShort': 'In credit',
   'pay.uncoveredClasses': '{n} unpaid classes',
   'pay.noOutstanding': 'Everyone is settled up.',
   'pay.backfilled': 'Covered {n} earlier classes',
@@ -646,6 +651,7 @@ const en: Record<Key, string> = {
   'me.noTechniques': 'No techniques recorded yet.',
   'me.owes': 'You owe {amount}',
   'me.clear': 'Your account is settled',
+  'me.credit': 'You have {amount} in credit with the club',
   'me.classesTotal': 'Total classes',
   'me.sinceLastPromotion': 'Since last promotion',
 

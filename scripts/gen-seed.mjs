@@ -42,6 +42,13 @@ const n = (v) => (v === null || v === undefined ? 'NULL' : String(v));
  * the 10th is treated as "that whole month counts", otherwise the count starts
  * the following month.
  */
+/** Adds whole days to a 'YYYY-MM-DD' string, in UTC so no day ever shifts. */
+function addDaysIso(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const at = new Date(Date.UTC(y, m - 1, d) + days * 86_400_000);
+  return at.toISOString().slice(0, 10);
+}
+
 function classesSincePromotion(m) {
   const [year, month, day] = m.last_promotion.split('-').map(Number);
   const firstMonth = year < 2026 ? 1 : day <= 10 ? month : month + 1;
@@ -200,17 +207,62 @@ for (const { id, m, atLastPromotion } of memberRows) {
 }
 say();
 
-// ------------------------------------------------------- opening balances ----
-const owing = memberRows.filter(({ m }) => m.owes_minor);
-if (owing.length) {
-  say('------------------------------------------------------- opening balances ---');
-  say('-- Free-text balance notes from the sheet, turned into real money owed.');
-  for (const { id, m } of owing) {
+// -------------------------------------------------- carried-over balances ----
+//
+// "باقي بحسابه ٦٠ ش" means the member has 60₪ sitting with the club — money
+// the club owes THEM. A balance is charges minus payments, so a credit is a
+// payment with no purchase against it, which leaves the balance negative. The
+// next thing they are charged eats into it automatically.
+const credited = memberRows.filter(({ m }) => m.credit_minor);
+if (credited.length) {
+  say('--------------------------------------------------- carried-over credit ---');
+  say('-- Credit the member already holds, NOT a debt: a payment with nothing');
+  say('-- charged against it, so the balance reads negative until it is used up.');
+  for (const { id, m } of credited) {
+    say(
+      `INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) ` +
+        `VALUES (${id}, NULL, ${n(m.credit_minor)}, 'ILS', ${q(sheet._exported_on)}, 'cash', ` +
+        `${q(m.credit_note)});`,
+    );
+  }
+  say();
+}
+
+// ------------------------------------------------ subscriptions from dates ----
+//
+// The sheet's "تاريخ اخر دفعة" column records WHEN someone paid but never how
+// much, and the whole team is on the monthly plan. Each date therefore becomes
+// a real monthly subscription starting that day, marked fully paid so nobody
+// shows a false debt.
+//
+// The AMOUNT is the only part the sheet cannot support: it is taken from the
+// seeded monthly plan and flagged in each row's note, so it can be corrected
+// once the real price is set.
+const MONTHLY_PLAN_ID = 1;
+const MONTHLY_PRICE_MINOR = plans[0][3];
+const MONTHLY_VALIDITY_DAYS = plans[0][5];
+
+const paid = memberRows.filter(({ m }) => m.last_payment);
+if (paid.length) {
+  say('----------------------------------------- subscriptions from the sheet ---');
+  say(`-- ${paid.length} members had a payment date. Amount assumed from the monthly`);
+  say('-- plan because the sheet recorded only the date — check these once the');
+  say('-- real price is set in Settings → Plans.');
+
+  for (const { id, m } of paid) {
+    const from = m.last_payment;
+    const until = addDaysIso(from, MONTHLY_VALIDITY_DAYS - 1);
+    const note = 'مستورد من الشيت — المبلغ مفترض من الخطة الشهرية';
+
     say(
       `INSERT INTO purchases (member_id, plan_id, plan_name_ar, plan_type, amount_minor, ` +
         `currency, sessions_total, sessions_used, valid_from, valid_until, status, note) VALUES (` +
-        `${id}, NULL, 'رصيد سابق', 'opening_balance', ${n(m.owes_minor)}, 'ILS', 0, 0, ` +
-        `${q(sheet._exported_on)}, NULL, 'active', ${q(m.owes_note)});`,
+        `${id}, ${MONTHLY_PLAN_ID}, 'اشتراك شهري', 'monthly', ${n(MONTHLY_PRICE_MINOR)}, 'ILS', ` +
+        `NULL, 0, ${q(from)}, ${q(until)}, 'active', ${q(note)});`,
+    );
+    say(
+      `INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, note) ` +
+        `VALUES (${id}, last_insert_rowid(), ${n(MONTHLY_PRICE_MINOR)}, 'ILS', ${q(from)}, 'cash', ${q(note)});`,
     );
   }
   say();
@@ -247,7 +299,8 @@ console.log(`Wrote ${out}`);
 if (withPhone) console.log(`Wrote ${phoneSqlPath} (gitignored — apply separately)`);
 console.log(`  members ............ ${sheet.members.length} (${active} active, ${sheet.members.length - active} inactive)`);
 console.log(`  phones attached ..... ${withPhone}/${sheet.members.length}${withPhone === 0 ? '  (none — add scripts/phones.local.json or fill them in the admin UI)' : ''}`);
-console.log(`  opening balances .... ${owing.length}`);
+console.log(`  carried-over credit . ${credited.length}`);
+console.log(`  subscriptions ....... ${paid.length} (from the sheet's payment dates)`);
 console.log(`  attendance totals ... all ${sheet.members.length} reconciled across both sheet tabs`);
 if (unmatchedPhones.size) {
   console.warn(`\n  ⚠ phones.local.json has names not in the sheet: ${[...unmatchedPhones].join(', ')}`);

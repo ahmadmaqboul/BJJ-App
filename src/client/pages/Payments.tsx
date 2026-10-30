@@ -120,8 +120,11 @@ export function Payments() {
                         r.outstandingMinor > 0 ? 'text-ink' : 'text-ink-muted',
                       )}
                     >
-                      {money(r.outstandingMinor)}
+                      {money(Math.abs(r.outstandingMinor))}
                     </p>
+                    {r.outstandingMinor < 0 && (
+                      <p className="text-xs text-ink-muted">{t('pay.creditShort')}</p>
+                    )}
                   </div>
                   <Icon name="chevron" className="size-4 shrink-0 flip-rtl text-ink-muted" />
                 </button>
