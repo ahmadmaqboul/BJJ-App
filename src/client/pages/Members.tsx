@@ -46,6 +46,7 @@ const SUB_TONE: Record<SubscriptionState, Tone> = {
   ending_soon: 'warning',
   expired: 'critical',
   never: 'neutral',
+  exempt: 'info',
 };
 
 type Filter = 'active' | 'inactive' | 'paused' | 'all';
@@ -122,6 +123,11 @@ export function Members() {
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-ink">{m.nameAr}</span>
+                    {m.memberType === 'coach' && (
+                      <Badge tone="info" icon="award">
+                        {t('memberType.coach')}
+                      </Badge>
+                    )}
                     {m.status !== 'active' && (
                       <Badge tone="neutral">{t(statusKey(m.status))}</Badge>
                     )}

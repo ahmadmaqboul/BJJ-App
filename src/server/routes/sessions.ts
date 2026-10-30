@@ -172,6 +172,10 @@ sessions.get('/:id', async (c) => {
     balancesFor(c.env, memberIds),
   ]);
 
+  const coachIds = new Set(
+    allActive.filter((m) => m.memberType === 'coach').map((m) => m.id),
+  );
+
   const build = (
     memberId: number,
     nameAr: string,
@@ -181,7 +185,10 @@ sessions.get('/:id', async (c) => {
   ) => {
     const rec = recordedMap.get(memberId);
     const ents = entitlements.get(memberId) ?? [];
-    const preview = pickCoverage(ents, session.date);
+    // Coaches train for free, so nothing is ever resolved or consumed for them.
+    const preview = coachIds.has(memberId)
+      ? { coverage: 'free' as const, purchaseId: null, consumes: false, remainingAfter: null }
+      : pickCoverage(ents, session.date);
     return {
       memberId,
       nameAr,
@@ -312,6 +319,15 @@ sessions.post('/:id/attendance', async (c) => {
   const existing = new Map((existingRows ?? []).map((r) => [r.member_id, r]));
   const entitlements = await entitlementsForMany(c.env, memberIds);
 
+  const { results: typeRows } = await c.env.DB.prepare(
+    `SELECT id, member_type FROM members WHERE id IN (${memberIds.map(() => '?').join(',')})`,
+  )
+    .bind(...memberIds)
+    .all<{ id: number; member_type: 'player' | 'coach' }>();
+  const coaches = new Set(
+    (typeRows ?? []).filter((r) => r.member_type === 'coach').map((r) => r.id),
+  );
+
   const statements: D1PreparedStatement[] = [];
   /** purchase id → net change in sessions_used across this save. */
   const consumption = new Map<number, number>();
@@ -342,7 +358,7 @@ sessions.post('/:id/attendance', async (c) => {
       coverage = null;
       purchaseId = null;
     } else if (!wasTrained) {
-      if (entry.coverage === 'free') {
+      if (entry.coverage === 'free' || coaches.has(entry.memberId)) {
         coverage = 'free';
         purchaseId = null;
       } else {

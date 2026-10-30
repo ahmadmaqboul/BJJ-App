@@ -58,6 +58,36 @@ describe('subscriptionStatusOf', () => {
   });
 
   /**
+   * A coach trains and is promoted like anyone else but is never billed, so
+   * "expired" or "never subscribed" would be noise on their row.
+   */
+  it('is "exempt" for a coach, whatever their ledger says', () => {
+    const noPlan = subscriptionStatusOf(
+      [],
+      { everPurchased: false, outstandingMinor: 0, feeExempt: true },
+      '2026-10-29',
+    );
+    expect(noPlan.state).toBe('exempt');
+
+    const lapsed = subscriptionStatusOf(
+      [ent({ validUntil: '2026-01-31' })],
+      { everPurchased: true, outstandingMinor: 0, feeExempt: true },
+      '2026-10-29',
+    );
+    expect(lapsed.state).toBe('exempt');
+  });
+
+  it('still reports a real balance a coach happens to carry', () => {
+    const owing = subscriptionStatusOf(
+      [],
+      { everPurchased: true, outstandingMinor: 4000, feeExempt: true },
+      '2026-10-29',
+    );
+    expect(owing.state).toBe('exempt');
+    expect(owing.owesMinor).toBe(4000);
+  });
+
+  /**
    * The two statuses are independent on purpose: these are the cases that a
    * single combined field would hide.
    */

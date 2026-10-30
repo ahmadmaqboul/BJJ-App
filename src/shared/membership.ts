@@ -16,6 +16,12 @@ import type { IsoDate } from './dates';
 
 export type MembershipStatus = 'active' | 'inactive' | 'paused';
 
+/**
+ * What a member is on the mat, as opposed to what their login may do. A coach
+ * trains and is promoted exactly like a player; they are simply never billed.
+ */
+export type MemberType = 'player' | 'coach';
+
 /** Why a member is not currently active. */
 export type StatusReason = 'travel' | 'injury' | 'stopped' | 'study' | 'cost' | 'other';
 
@@ -29,6 +35,8 @@ export const STATUS_REASONS: StatusReason[] = [
 ];
 
 export type SubscriptionState =
+  /** Not billed at all — a coach. */
+  | 'exempt'
   /** Covered, with comfortable room left. */
   | 'subscribed'
   /** Covered, but about to run out — the nudge-them-now group. */
@@ -52,11 +60,18 @@ export const ENDING_SOON_SESSIONS = 2;
 
 export function subscriptionStatusOf(
   entitlements: Entitlement[],
-  opts: { everPurchased: boolean; outstandingMinor: number },
+  opts: { everPurchased: boolean; outstandingMinor: number; feeExempt?: boolean },
   asOf: IsoDate,
 ): SubscriptionStatus {
   const outlook = coverageOutlook(entitlements, asOf);
   const owesMinor = opts.outstandingMinor;
+
+  // A coach is never chased for a subscription, so "expired" would be noise.
+  // Any balance they do carry is still reported, since a coach can still be
+  // owed money or owe some.
+  if (opts.feeExempt) {
+    return { state: 'exempt', outlook, owesMinor };
+  }
 
   let state: SubscriptionState;
   if (outlook.kind === 'covered_until') {
@@ -76,6 +91,7 @@ const SUBSCRIPTION_RANK: Record<SubscriptionState, number> = {
   ending_soon: 1,
   never: 2,
   subscribed: 3,
+  exempt: 4,
 };
 
 export function compareBySubscription(a: SubscriptionState, b: SubscriptionState): number {

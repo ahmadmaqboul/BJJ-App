@@ -5,9 +5,20 @@ import type { Eligibility } from '../../shared/promotion';
 import { BELTS } from '../../shared/types';
 import { parseMoney } from '../../shared/billing';
 import { today } from '../../shared/dates';
-import { beltKey, methodKey, promoStatusKey, reasonKey, statusKey, subKey, useLang, useT } from '../i18n';
+import {
+  beltKey,
+  memberTypeKey,
+  methodKey,
+  promoStatusKey,
+  reasonKey,
+  statusKey,
+  subKey,
+  useLang,
+  useT,
+} from '../i18n';
 import {
   STATUS_REASONS,
+  type MemberType,
   type StatusReason,
   type SubscriptionState,
   type SubscriptionStatus,
@@ -144,6 +155,11 @@ export function MemberProfile() {
               <Badge tone={member.status === 'active' ? 'good' : 'neutral'}>
                 {t(statusKey(member.status))}
               </Badge>
+              {member.memberType === 'coach' && (
+                <Badge tone="info" icon="award">
+                  {t('memberType.coach')}
+                </Badge>
+              )}
               {member.phone && (
                 <a
                   href={`tel:${member.phone}`}
@@ -942,6 +958,7 @@ function EditMemberSheet({
   const [birthDate, setBirthDate] = useState(member.birthDate ?? '');
   const [joinDate, setJoinDate] = useState(member.joinDate);
   const [status, setStatus] = useState<MemberStatus>(member.status);
+  const [memberType, setMemberType] = useState<MemberType>(member.memberType);
   const [notes, setNotes] = useState(member.notes ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -957,6 +974,7 @@ function EditMemberSheet({
         birthDate: birthDate || null,
         joinDate,
         status,
+        memberType,
         notes: notes || null,
       });
       toast.show(t('me.profileSaved'), 'good');
@@ -1012,6 +1030,18 @@ function EditMemberSheet({
             {(['active', 'inactive', 'paused'] as MemberStatus[]).map((s) => (
               <option key={s} value={s}>
                 {t(statusKey(s))}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t('members.type')} hint={t('members.coachHint')}>
+          <Select
+            value={memberType}
+            onChange={(e) => setMemberType(e.target.value as MemberType)}
+          >
+            {(['player', 'coach'] as MemberType[]).map((mt) => (
+              <option key={mt} value={mt}>
+                {t(memberTypeKey(mt))}
               </option>
             ))}
           </Select>
@@ -1161,6 +1191,7 @@ const SUB_TONE: Record<SubscriptionState, Tone> = {
   ending_soon: 'warning',
   expired: 'critical',
   never: 'neutral',
+  exempt: 'info',
 };
 
 const MEMBERSHIP_TONE: Record<MemberStatus, Tone> = {

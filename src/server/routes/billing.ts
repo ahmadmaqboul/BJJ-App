@@ -411,7 +411,8 @@ billing.get('/outstanding', requireStaff, async (c) => {
   const balances = await balancesFor(c.env);
 
   const { results: memberRows } = await c.env.DB.prepare(
-    `SELECT id, name_ar, phone, status, belt, stripes FROM members ORDER BY name_ar COLLATE NOCASE`,
+    `SELECT id, name_ar, phone, status, belt, stripes, member_type
+       FROM members ORDER BY name_ar COLLATE NOCASE`,
   ).all<{
     id: number;
     name_ar: string;
@@ -419,6 +420,7 @@ billing.get('/outstanding', requireStaff, async (c) => {
     status: string;
     belt: string;
     stripes: number;
+    member_type: 'player' | 'coach';
   }>();
 
   const { results: lastPayments } = await c.env.DB.prepare(
@@ -442,15 +444,20 @@ billing.get('/outstanding', requireStaff, async (c) => {
       status: m.status,
       belt: m.belt,
       stripes: m.stripes,
+      memberType: m.member_type,
       ...bal,
       lastPaidOn: lastPaid.get(m.id) ?? null,
       uncoveredClasses: uncovered.get(m.id) ?? 0,
     };
   });
 
+  // Coaches train for free, so they never count toward money owed — but a
+  // real balance they carry is still shown on their own row.
+  const billable = rows.filter((r) => r.memberType !== 'coach');
+
   return c.json({
     rows: rows.sort((a, b) => b.outstandingMinor - a.outstandingMinor),
-    totalOutstandingMinor: rows.reduce((sum, r) => sum + Math.max(0, r.outstandingMinor), 0),
+    totalOutstandingMinor: billable.reduce((sum, r) => sum + Math.max(0, r.outstandingMinor), 0),
   });
 });
 
@@ -486,6 +493,38 @@ billing.get('/members/:id', async (c) => {
     balance: balances.get(id) ?? { chargedMinor: 0, paidMinor: 0, outstandingMinor: 0 },
     currentCoverage: coverage,
   });
+});
+
+/**
+ * Deletes a plan.
+ *
+ * Safe for history: every purchase snapshots the plan's name, price and
+ * session count at the time it was sold, and `purchases.plan_id` is
+ * ON DELETE SET NULL. So removing a plan changes what can be sold from now on
+ * and nothing about what was already sold or paid.
+ *
+ * The response says how many purchases were made from it, so the UI can warn
+ * before a plan with history is removed — deactivating is usually the better
+ * move there, and keeps it selectable in reports.
+ */
+billing.delete('/plans/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+
+  const plan = await c.env.DB.prepare(`SELECT id, name_ar FROM plans WHERE id = ?`)
+    .bind(id)
+    .first<{ id: number; name_ar: string }>();
+  if (!plan) throw new HTTPException(404, { message: 'plan_not_found' });
+
+  const used = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM purchases WHERE plan_id = ?`,
+  )
+    .bind(id)
+    .first<{ n: number }>();
+
+  await c.env.DB.prepare(`DELETE FROM plans WHERE id = ?`).bind(id).run();
+
+  await audit(c, 'plan.delete', 'plan', id, { nameAr: plan.name_ar, purchases: used?.n ?? 0 });
+  return c.json({ ok: true, purchasesKept: used?.n ?? 0 });
 });
 
 export default billing;

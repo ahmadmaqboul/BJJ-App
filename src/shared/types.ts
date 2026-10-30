@@ -1,5 +1,5 @@
 import type { IsoDate } from './dates';
-import type { StatusReason } from './membership';
+import type { MemberType, StatusReason } from './membership';
 
 export type Belt = 'white' | 'blue' | 'purple' | 'brown' | 'black';
 export const BELTS: Belt[] = ['white', 'blue', 'purple', 'brown', 'black'];
@@ -25,6 +25,8 @@ export interface Member {
   birthDate: IsoDate | null;
   joinDate: IsoDate;
   status: MemberStatus;
+  /** Player or coach. A coach trains but is never billed. */
+  memberType: MemberType;
   /** Why they are not active. Null while active. */
   statusReason: StatusReason | null;
   statusNote: string | null;

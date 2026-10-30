@@ -1,5 +1,5 @@
 import type { Belt, Member, MemberStatus, PromotionRule, Role } from '../shared/types';
-import type { StatusReason } from '../shared/membership';
+import type { MemberType, StatusReason } from '../shared/membership';
 import type { Entitlement } from '../shared/billing';
 import type { Env } from './env';
 
@@ -10,7 +10,7 @@ import type { Env } from './env';
  */
 const MEMBER_SELECT = `
   SELECT m.id, m.name_ar, m.name_en, m.phone, m.birth_date, m.join_date, m.status,
-         m.status_reason, m.status_note, m.status_changed_on,
+         m.status_reason, m.status_note, m.status_changed_on, m.member_type,
          m.belt, m.stripes, m.last_promotion_date, m.legacy_attendance,
          m.classes_at_last_promotion, m.notes,
          m.legacy_attendance + COALESCE(att.cnt, 0) AS total_classes,
@@ -34,6 +34,7 @@ export interface MemberRow {
   birth_date: string | null;
   join_date: string;
   status: MemberStatus;
+  member_type: MemberType;
   status_reason: StatusReason | null;
   status_note: string | null;
   status_changed_on: string | null;
@@ -57,6 +58,7 @@ export function toMember(r: MemberRow): Member {
     birthDate: r.birth_date,
     joinDate: r.join_date,
     status: r.status,
+    memberType: r.member_type,
     statusReason: r.status_reason,
     statusNote: r.status_note,
     statusChangedOn: r.status_changed_on,

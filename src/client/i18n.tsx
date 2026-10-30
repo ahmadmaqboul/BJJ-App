@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Belt, Coverage, MemberStatus, PaymentMethod, PlanType } from '../shared/types';
 import type { PromotionStatus } from '../shared/promotion';
-import type { StatusReason, SubscriptionState } from '../shared/membership';
+import type { MemberType, StatusReason, SubscriptionState } from '../shared/membership';
 
 /**
  * Arabic is the default and the source of truth for wording — the team's data,
@@ -244,6 +244,15 @@ const ar = {
   'settings.planValidity': 'مدة الصلاحية (أيام)',
   'settings.planActive': 'مفعّلة',
   'settings.addPlan': 'إضافة خطة',
+  'settings.newPlan': 'خطة جديدة',
+  'settings.planType': 'نوع الخطة',
+  'settings.deletePlan': 'حذف الخطة',
+  'settings.deletePlanConfirm': 'بدك تحذف هاي الخطة؟',
+  'settings.deletePlanKeeps': 'الاشتراكات المباعة منها بتضل محفوظة بأسعارها — بس ما بتقدر تبيع منها بعدين.',
+  'settings.deletePlanUsed': 'هاي الخطة مستعملة بـ{n} اشتراك. إذا بدك تبطّلها بس وتضل بالتقارير، عطّلها بدل ما تحذفها.',
+  'settings.planDeleted': 'تم حذف الخطة',
+  'settings.planSaved': 'تم حفظ الخطة',
+  'settings.sessionsHint': 'الشهري غير محدود — عدد الحصص للبطاقات والحصة المفردة.',
   'settings.placeholderPrices': 'الأسعار الحالية مبدئية — عدّلها قبل الاستخدام الفعلي.',
   'settings.language': 'اللغة',
   'settings.theme': 'المظهر',
@@ -395,10 +404,15 @@ const ar = {
   'sub.ending_soon': 'قارب ينتهي',
   'sub.expired': 'اشتراك منتهي',
   'sub.never': 'ما اشترك',
+  'sub.exempt': 'معفى من الاشتراك',
   'sub.title': 'حالة الاشتراك',
   'sub.all': 'كل الاشتراكات',
 
   'members.membership': 'حالة العضوية',
+  'members.type': 'النوع',
+  'memberType.player': 'لاعب',
+  'memberType.coach': 'مدرب',
+  'members.coachHint': 'المدرب بيحضر وبيترقّى زي اللاعبين، بس ما عليه اشتراك وحضوره بينحسب مجاني.',
   'members.changeStatus': 'تغيير الحالة',
   'members.reason': 'السبب',
   'members.statusNote': 'ملاحظة',
@@ -648,6 +662,15 @@ const en: Record<Key, string> = {
   'settings.planValidity': 'Validity (days)',
   'settings.planActive': 'Active',
   'settings.addPlan': 'Add plan',
+  'settings.newPlan': 'New plan',
+  'settings.planType': 'Plan type',
+  'settings.deletePlan': 'Delete plan',
+  'settings.deletePlanConfirm': 'Delete this plan?',
+  'settings.deletePlanKeeps': 'Subscriptions already sold from it keep their prices — you just cannot sell it any more.',
+  'settings.deletePlanUsed': 'This plan has been used for {n} subscriptions. To stop selling it but keep it in reports, deactivate it instead of deleting.',
+  'settings.planDeleted': 'Plan deleted',
+  'settings.planSaved': 'Plan saved',
+  'settings.sessionsHint': 'Monthly is unlimited — session count applies to cards and single sessions.',
   'settings.placeholderPrices': 'Prices are placeholders — set the real ones before using this.',
   'settings.language': 'Language',
   'settings.theme': 'Appearance',
@@ -799,10 +822,15 @@ const en: Record<Key, string> = {
   'sub.ending_soon': 'Ending soon',
   'sub.expired': 'Expired',
   'sub.never': 'Never subscribed',
+  'sub.exempt': 'No fees',
   'sub.title': 'Subscription',
   'sub.all': 'All subscriptions',
 
   'members.membership': 'Membership',
+  'members.type': 'Type',
+  'memberType.player': 'Player',
+  'memberType.coach': 'Coach',
+  'members.coachHint': 'A coach attends and is promoted like a player, but is never billed and their check-ins record as free.',
   'members.changeStatus': 'Change status',
   'members.reason': 'Reason',
   'members.statusNote': 'Note',
@@ -893,3 +921,4 @@ export const planTypeKey = (p: PlanType) => `planType.${p}` as Key;
 export const promoStatusKey = (s: PromotionStatus) => `promoStatus.${s}` as Key;
 export const reasonKey = (r: StatusReason) => `reason.${r}` as Key;
 export const subKey = (s: SubscriptionState) => `sub.${s}` as Key;
+export const memberTypeKey = (m: MemberType) => `memberType.${m}` as Key;

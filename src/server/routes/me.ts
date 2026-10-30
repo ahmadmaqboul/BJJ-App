@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { coverageOutlook, pickCoverage } from '../../shared/billing';
+import { subscriptionStatusOf } from '../../shared/membership';
 import { evaluateEligibility } from '../../shared/promotion';
 import { isIsoDate } from '../../shared/dates';
 import type { AppBindings } from '../env';
@@ -136,8 +137,20 @@ me.get('/overview', async (c) => {
     eligibility,
     rule: rule ?? null,
     balance: balances.get(member.id) ?? { chargedMinor: 0, paidMinor: 0, outstandingMinor: 0 },
-    currentCoverage: pickCoverage(entitlements, asOf),
+    currentCoverage: member.memberType === 'coach'
+      ? { coverage: 'free' as const, purchaseId: null, consumes: false, remainingAfter: null }
+      : pickCoverage(entitlements, asOf),
     outlook: coverageOutlook(entitlements, asOf),
+    subscription: subscriptionStatusOf(
+      entitlements,
+      {
+        everPurchased: entitlements.length > 0,
+        outstandingMinor:
+          balances.get(member.id)?.outstandingMinor ?? 0,
+        feeExempt: member.memberType === 'coach',
+      },
+      asOf,
+    ),
     activeEntitlements: entitlements,
     lastPayment: lastPayment ?? null,
     attendance: attendance.results ?? [],

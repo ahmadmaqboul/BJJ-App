@@ -12,12 +12,14 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmSheet,
   ErrorBlock,
   Field,
   Input,
   LoadingBlock,
   SectionTitle,
   Segmented,
+  Select,
   Sheet,
   Switch,
   useToast,
@@ -232,12 +234,24 @@ function PlansSection({ editable }: { editable: boolean }) {
   const t = useT();
   const { data, loading, reload } = useApi<{ plans: Plan[] }>('/api/billing/plans?includeInactive=1');
   const [editing, setEditing] = useState<Plan | null>(null);
+  const [creating, setCreating] = useState(false);
 
   if (loading && !data) return <LoadingBlock />;
 
   return (
     <section>
-      <SectionTitle hint={t('settings.placeholderPrices')}>{t('settings.plans')}</SectionTitle>
+      <SectionTitle
+        hint={t('settings.placeholderPrices')}
+        action={
+          editable ? (
+            <Button size="sm" variant="primary" icon="plus" onClick={() => setCreating(true)}>
+              {t('settings.addPlan')}
+            </Button>
+          ) : undefined
+        }
+      >
+        {t('settings.plans')}
+      </SectionTitle>
       <ul className="space-y-1.5">
         {(data?.plans ?? []).map((p) => (
           <Card as="li" key={p.id} className="p-3">
@@ -282,32 +296,57 @@ function PlansSection({ editable }: { editable: boolean }) {
           }}
         />
       )}
+
+      {creating && (
+        <EditPlanSheet
+          plan={null}
+          onClose={() => setCreating(false)}
+          onDone={() => {
+            setCreating(false);
+            reload();
+          }}
+        />
+      )}
     </section>
   );
 }
 
+/**
+ * One sheet for creating, editing and deleting a plan. `plan` being null is
+ * the create case — the type is only choosable there, because changing the
+ * type of a plan that has already been sold would make its past purchases
+ * describe something they were not.
+ */
 function EditPlanSheet({
   plan,
   onClose,
   onDone,
 }: {
-  plan: Plan;
+  plan: Plan | null;
   onClose: () => void;
   onDone: () => void;
 }) {
   const t = useT();
   const toast = useToast();
-  const [nameAr, setNameAr] = useState(plan.name_ar);
-  const [price, setPrice] = useState(String(plan.price_minor / 100));
+  const isNew = plan === null;
+
+  const [nameAr, setNameAr] = useState(plan?.name_ar ?? '');
+  const [type, setType] = useState<PlanType>(plan?.type ?? 'monthly');
+  const [price, setPrice] = useState(plan ? String(plan.price_minor / 100) : '');
   const [sessions, setSessions] = useState(
-    plan.sessions_included == null ? '' : String(plan.sessions_included),
+    plan?.sessions_included == null ? '' : String(plan.sessions_included),
   );
   const [validity, setValidity] = useState(
-    plan.validity_days == null ? '' : String(plan.validity_days),
+    plan?.validity_days == null ? '' : String(plan.validity_days),
   );
-  const [active, setActive] = useState(!!plan.active);
+  const [active, setActive] = useState(plan ? !!plan.active : true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [usedBy, setUsedBy] = useState<number | null>(null);
+
+  // A monthly plan is unlimited by definition; the others must say how many.
+  const needsSessions = type !== 'monthly';
 
   async function save() {
     const minor = parseMoney(price);
@@ -315,17 +354,39 @@ function EditPlanSheet({
       setError(t('err.bad_amount'));
       return;
     }
+    if (!nameAr.trim()) {
+      setError(t('err.name_required'));
+      return;
+    }
+
+    const sessionsIncluded = needsSessions
+      ? sessions === ''
+        ? type === 'single'
+          ? 1
+          : null
+        : Number(sessions)
+      : null;
+
+    if (needsSessions && (sessionsIncluded === null || sessionsIncluded < 1)) {
+      setError(t('settings.sessionsHint'));
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      await api.patch(`/api/billing/plans/${plan.id}`, {
-        nameAr,
+      const body = {
+        nameAr: nameAr.trim(),
+        nameEn: nameAr.trim(),
         priceMinor: minor,
-        sessionsIncluded: sessions === '' ? null : Number(sessions),
+        sessionsIncluded,
         validityDays: validity === '' ? null : Number(validity),
         active,
-      });
-      toast.show(t('common.save'), 'good');
+      };
+      if (isNew) await api.post('/api/billing/plans', { ...body, type });
+      else await api.patch(`/api/billing/plans/${plan.id}`, body);
+
+      toast.show(t('settings.planSaved'), 'good');
       onDone();
     } catch (err) {
       const { key, vars } = errorKey(err);
@@ -335,21 +396,85 @@ function EditPlanSheet({
     }
   }
 
+  async function remove() {
+    if (!plan || busy) return;
+    setBusy(true);
+    try {
+      const res = await api.del<{ purchasesKept: number }>(`/api/billing/plans/${plan.id}`);
+      setUsedBy(res.purchasesKept);
+      toast.show(t('settings.planDeleted'), 'good');
+      onDone();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      toast.show(t(key as 'err.generic', vars), 'warning');
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (confirmDelete && plan) {
+    return (
+      <ConfirmSheet
+        open
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={remove}
+        title={t('settings.deletePlan')}
+        body={
+          <div className="space-y-2">
+            <p>{t('settings.deletePlanConfirm')}</p>
+            <p>{t('settings.deletePlanKeeps')}</p>
+            {usedBy !== null && usedBy > 0 && (
+              <p className="text-ink">{t('settings.deletePlanUsed', { n: usedBy })}</p>
+            )}
+          </div>
+        }
+        confirmLabel={t('common.delete')}
+        busy={busy}
+      />
+    );
+  }
+
   return (
     <Sheet
       open
       onClose={onClose}
-      title={plan.name_ar}
+      title={isNew ? t('settings.newPlan') : plan.name_ar}
       footer={
-        <Button variant="primary" size="lg" onClick={save} disabled={busy}>
-          {busy ? t('common.saving') : t('common.save')}
-        </Button>
+        <div className="space-y-2">
+          <Button variant="primary" size="lg" onClick={save} disabled={busy}>
+            {busy ? t('common.saving') : t('common.save')}
+          </Button>
+          {!isNew && (
+            <Button variant="ghost" size="lg" icon="trash" onClick={() => setConfirmDelete(true)}>
+              {t('settings.deletePlan')}
+            </Button>
+          )}
+        </div>
       }
     >
       <div className="space-y-4">
         <Field label={t('settings.planName')}>
-          <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
+          <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} autoFocus={isNew} />
         </Field>
+
+        <Field
+          label={t('settings.planType')}
+          hint={isNew ? undefined : t('settings.sessionsHint')}
+        >
+          <Select
+            value={type}
+            onChange={(e) => setType(e.target.value as PlanType)}
+            disabled={!isNew}
+          >
+            {(['monthly', 'package', 'single'] as PlanType[]).map((pt) => (
+              <option key={pt} value={pt}>
+                {t(planTypeKey(pt))}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
         <Field label={t('settings.planPrice')} error={error ?? undefined}>
           <Input
             inputMode="decimal"
@@ -357,17 +482,23 @@ function EditPlanSheet({
             className="text-start"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
+            placeholder="150"
           />
         </Field>
+
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t('settings.planSessions')} hint={t('pay.unlimited')}>
+          <Field
+            label={t('settings.planSessions')}
+            hint={needsSessions ? undefined : t('pay.unlimited')}
+          >
             <Input
               type="number"
               inputMode="numeric"
               dir="ltr"
-              value={sessions}
+              value={needsSessions ? sessions : ''}
               onChange={(e) => setSessions(e.target.value)}
-              disabled={plan.type === 'monthly'}
+              disabled={!needsSessions}
+              placeholder={type === 'single' ? '1' : '8'}
             />
           </Field>
           <Field label={t('settings.planValidity')} hint={t('pay.noExpiry')}>
@@ -377,9 +508,11 @@ function EditPlanSheet({
               dir="ltr"
               value={validity}
               onChange={(e) => setValidity(e.target.value)}
+              placeholder="30"
             />
           </Field>
         </div>
+
         <Switch checked={active} onChange={setActive} label={t('settings.planActive')} />
       </div>
     </Sheet>

@@ -6,6 +6,7 @@ import type { Belt, MemberStatus } from '../../shared/types';
 import {
   STATUS_REASONS,
   subscriptionStatusOf,
+  type MemberType,
   type StatusReason,
   type SubscriptionState,
 } from '../../shared/membership';
@@ -61,7 +62,11 @@ members.get('/', requireStaff, async (c) => {
       // The second, independent status: what is paying for them right now.
       subscription: subscriptionStatusOf(
         entitlements.get(m.id) ?? [],
-        { everPurchased: act.everPurchased, outstandingMinor: balance.outstandingMinor },
+        {
+          everPurchased: act.everPurchased,
+          outstandingMinor: balance.outstandingMinor,
+          feeExempt: m.memberType === 'coach',
+        },
         asOf,
       ),
       eligibility: rules[m.belt]
@@ -186,7 +191,11 @@ members.get('/:id', async (c) => {
     // The second status: what is paying for them right now, derived live.
     subscription: subscriptionStatusOf(
       entitlements.get(id) ?? [],
-      { everPurchased: act.everPurchased, outstandingMinor: balance.outstandingMinor },
+      {
+        everPurchased: act.everPurchased,
+        outstandingMinor: balance.outstandingMinor,
+        feeExempt: member.memberType === 'coach',
+      },
       asOf,
     ),
     lastSeen: act.lastSeen,
@@ -199,6 +208,7 @@ members.get('/:id', async (c) => {
 });
 
 interface MemberBody {
+  memberType?: MemberType;
   nameAr?: string;
   nameEn?: string | null;
   phone?: string | null;
@@ -294,6 +304,12 @@ members.patch('/:id', requireAdmin, async (c) => {
     put('join_date', body.joinDate);
   }
   if (body.notes !== undefined) put('notes', body.notes?.trim() || null);
+  if (body.memberType !== undefined) {
+    if (body.memberType !== 'player' && body.memberType !== 'coach') {
+      throw new HTTPException(400, { message: 'bad_member_type' });
+    }
+    put('member_type', body.memberType);
+  }
 
   if (body.status !== undefined) {
     if (!STATUSES.includes(body.status)) throw new HTTPException(400, { message: 'bad_status' });
