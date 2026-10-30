@@ -24,7 +24,8 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const BUTTON_BASE =
   'inline-flex items-center justify-center gap-2 rounded-xl2 font-medium transition-colors ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-series disabled:opacity-50 disabled:pointer-events-none select-none';
+  'focus-visible:outline-series disabled:opacity-50 disabled:pointer-events-none select-none ' +
+  'whitespace-nowrap';
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   primary: 'bg-series text-white hover:brightness-110 active:brightness-95',

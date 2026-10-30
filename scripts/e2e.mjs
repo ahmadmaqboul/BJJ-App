@@ -1,5 +1,16 @@
 // End-to-end exercise of the API against the local Worker + seeded D1.
 const BASE = 'http://127.0.0.1:8787';
+
+// Anchored to the server's own idea of today so the suite does not rot
+// overnight — several assertions depend on a class being dated today.
+const health = await (await fetch(`${BASE}/api/health`)).json();
+const TODAY = health.today;
+const addDays = (iso, n) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) + n * 86_400_000).toISOString().slice(0, 10);
+};
+const TOMORROW = addDays(TODAY, 1);
+const IN_THREE_DAYS = addDays(TODAY, 3);
 let cookie = '';
 let failures = 0;
 
@@ -59,7 +70,15 @@ const alaa = members.find((m) => m.nameAr === 'علاء شريم');
 check('علاء شريم is purple with 126 classes', alaa?.belt === 'purple' && alaa?.totalClasses === 126, alaa);
 
 const hasan = members.find((m) => m.nameAr === 'حسن حجاوي');
-check('حسن حجاوي owes 60 ILS from the sheet note', hasan?.balance?.outstandingMinor === 6000, hasan?.balance);
+check('حسن حجاوي holds 60 ILS CREDIT from the sheet note (the club owes him)',
+  hasan?.balance?.outstandingMinor === -6000, hasan?.balance);
+
+// Six members had a payment date in the sheet and now carry a real subscription.
+const live = members.filter(
+  (m) => m.subscription?.state === 'subscribed' || m.subscription?.state === 'ending_soon',
+);
+check('6 members imported with a live monthly subscription',
+  live.length === 6, live.map((m) => `${m.nameAr}:${m.subscription.state}`));
 
 console.log('\n== promotion board ==');
 r = await call('GET', '/api/promotions/board');
@@ -78,7 +97,7 @@ check('6 inactive members excluded from promotion flow', inactiveCount === 6, bo
 
 console.log('\n== class + attendance ==');
 r = await call('POST', '/api/sessions', {
-  date: '2026-10-29',
+  date: TODAY,
   startTime: '19:00',
   classType: 'gi',
   techniqueTitle: 'عبور الحراسة - knee slice',
@@ -86,28 +105,35 @@ r = await call('POST', '/api/sessions', {
 const sessionId = r.body?.session?.id;
 check('class created', r.status === 201 && !!sessionId, r.body);
 
-r = await call('POST', '/api/sessions', { date: '2026-10-29', startTime: '19:00', classType: 'gi' });
+r = await call('POST', '/api/sessions', { date: TODAY, startTime: '19:00', classType: 'gi' });
 check('duplicate class returns the existing one', r.body?.existed === true, r.body);
 
 r = await call('GET', `/api/sessions/${sessionId}`);
 const roster = r.body?.roster ?? [];
 check('roster covers the 19 active members', roster.length === 19, roster.length);
-check('everyone previews as uncovered before any purchase',
-  roster.every((x) => x.preview.coverage === 'uncovered'),
+// The six with imported subscriptions preview as covered; the rest do not.
+check('members with an imported subscription preview as monthly',
+  roster.filter((x) => x.preview.coverage === 'monthly').length === 6,
+  roster.filter((x) => x.preview.coverage === 'monthly').map((x) => x.nameAr));
+check('members the sheet never recorded paying preview as uncovered',
+  roster.some((x) => x.preview.coverage === 'uncovered'),
   roster.slice(0, 2).map((x) => x.preview));
 
 const alaaId = alaa.id;
-const hamza = members.find((m) => m.nameAr === 'حمزة الصدر');
+// زيد has no payment date in the sheet, so nothing covers him — which is what
+// the walk-in flow below needs. حمزة now arrives with a subscription.
+const hamza = members.find((m) => m.nameAr === 'زيد');
+check('زيد starts with no subscription', hamza?.subscription?.state === 'never', hamza?.subscription);
 
 r = await call('POST', `/api/sessions/${sessionId}/attendance`, {
   entries: [
     { memberId: alaaId, status: 'present' },
     { memberId: hamza.id, status: 'present' },
-    { memberId: members.find((m) => m.nameAr === 'زيد').id, status: 'absent' },
+    { memberId: members.find((m) => m.nameAr === 'أحمد زبلح').id, status: 'absent' },
   ],
 });
 check('attendance saved', r.status === 200 && r.body?.saved === 3, r.body);
-check('present members recorded uncovered (no plan yet)',
+check('both present members recorded uncovered (neither has a plan)',
   r.body?.entries?.filter((e) => e.coverage === 'uncovered').length === 2, r.body?.entries);
 
 r = await call('GET', `/api/members/${alaaId}`);
@@ -151,7 +177,7 @@ const alaaRow = r.body.roster.find((x) => x.memberId === alaaId);
 check('covered by monthly', alaaRow?.coverage === 'monthly', alaaRow);
 
 // A second class on the monthly must not consume anything.
-r = await call('POST', '/api/sessions', { date: '2026-10-30', startTime: '19:00', classType: 'nogi' });
+r = await call('POST', '/api/sessions', { date: TOMORROW, startTime: '19:00', classType: 'nogi' });
 const s2 = r.body.session.id;
 r = await call('POST', `/api/sessions/${s2}/attendance`, {
   entries: [{ memberId: alaaId, status: 'present' }, { memberId: hamza.id, status: 'present' }],
@@ -172,7 +198,7 @@ r = await call('POST', `/api/sessions/${s2}/attendance`, {
 check('re-save keeps the existing coverage, no double charge',
   r.body?.entries?.[0]?.coverage === 'uncovered', r.body?.entries);
 
-r = await call('POST', '/api/sessions', { date: '2026-11-01', classType: 'gi' });
+r = await call('POST', '/api/sessions', { date: IN_THREE_DAYS, classType: 'gi' });
 const s3 = r.body.session.id;
 r = await call('POST', `/api/sessions/${s3}/attendance`, { entries: [{ memberId: hamza.id, status: 'present' }] });
 check('new class draws on the package', r.body?.entries?.[0]?.coverage === 'package', r.body?.entries);
@@ -193,7 +219,7 @@ r = await call('POST', `/api/promotions/member/${ahmad.id}`, {});
 check('promotion refused while attendance gate is short',
   r.status === 409 && String(r.body?.error).startsWith('not_eligible'), r.body?.error);
 
-r = await call('POST', `/api/promotions/member/${ahmad.id}`, { override: true, promotedOn: '2026-10-29' });
+r = await call('POST', `/api/promotions/member/${ahmad.id}`, { override: true, promotedOn: TODAY });
 check('override awards it', r.status === 201, r.body);
 check('blue/0 -> blue/1', r.body?.member?.belt === 'blue' && r.body?.member?.stripes === 1, r.body?.member);
 check('class baseline reset so the next cycle starts at zero',
@@ -235,7 +261,7 @@ check('player cannot read another member', r.status === 403, r.body);
 r = await call('GET', `/api/members/${hamza.id}`);
 check('player can read their own record', r.status === 200, r.body?.error);
 r = await call('GET', '/api/me/overview');
-check('player overview works', r.status === 200 && r.body?.member?.nameAr === 'حمزة الصدر', r.body?.error);
+check('player overview works', r.status === 200 && r.body?.member?.nameAr === hamza.nameAr, r.body?.error);
 check('player sees their own belt progress', typeof r.body?.eligibility?.progress === 'number', r.body?.eligibility);
 check('player sees what the team worked on', Array.isArray(r.body?.recentClasses), r.body?.recentClasses);
 

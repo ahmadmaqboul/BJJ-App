@@ -29,25 +29,13 @@ interface AuthValue {
   signIn: (login: string, pin: string, remember: boolean) => Promise<SessionUser>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
-  /** Staff who also train can flip between the two interfaces. */
-  playerView: boolean;
-  setPlayerView: (v: boolean) => void;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
 
-const VIEW_KEY = 'jj.playerView';
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [playerView, setPlayerViewState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(VIEW_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
 
   const refresh = useCallback(async () => {
     try {
@@ -77,18 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const setPlayerView = useCallback((v: boolean) => {
-    setPlayerViewState(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v ? '1' : '0');
-    } catch {
-      // Not persisting the view choice is survivable.
-    }
-  }, []);
-
   const value = useMemo(
-    () => ({ user, loading, signIn, signOut, refresh, playerView, setPlayerView }),
-    [user, loading, signIn, signOut, refresh, playerView, setPlayerView],
+    () => ({ user, loading, signIn, signOut, refresh }),
+    [user, loading, signIn, signOut, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

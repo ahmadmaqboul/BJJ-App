@@ -97,14 +97,6 @@ export function Dashboard() {
           <Button variant="primary" size="lg" icon="plus" onClick={startTodayClass} disabled={starting}>
             {starting ? t('common.saving') : t('dash.startClass')}
           </Button>
-          <div className="grid grid-cols-2 gap-2">
-            <Button icon="list" onClick={() => nav('/groups')}>
-              {t('groups.title')}
-            </Button>
-            <Button icon="settings" onClick={() => nav('/settings')}>
-              {t('nav.settings')}
-            </Button>
-          </div>
         </div>
       </div>
 

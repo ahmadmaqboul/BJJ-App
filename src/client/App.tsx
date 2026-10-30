@@ -15,6 +15,7 @@ import { Promotions } from './pages/Promotions';
 import { Groups } from './pages/Groups';
 import { Settings } from './pages/Settings';
 import { MyProfile } from './pages/MyProfile';
+import { More } from './pages/More';
 
 interface NavItem {
   to: string;
@@ -51,42 +52,8 @@ function BottomNav({ items }: { items: NavItem[] }) {
   );
 }
 
-function ViewSwitcher() {
-  const t = useT();
-  const { playerView, setPlayerView } = useAuth();
-  return (
-    <div className="flex rounded-full bg-plane p-0.5 ring-1 ring-hairline" role="tablist">
-      {[
-        { v: false, label: t('view.admin'), icon: 'settings' as IconName },
-        { v: true, label: t('view.player'), icon: 'users' as IconName },
-      ].map((opt) => (
-        <button
-          key={String(opt.v)}
-          role="tab"
-          aria-selected={playerView === opt.v}
-          aria-label={opt.label}
-          title={opt.label}
-          onClick={() => setPlayerView(opt.v)}
-          className={cx(
-            'flex h-8 items-center gap-1.5 rounded-full px-3 text-xs transition-colors',
-            playerView === opt.v
-              ? 'bg-surface font-semibold text-ink shadow-card'
-              : 'text-ink-soft',
-          )}
-        >
-          <Icon name={opt.icon} className="size-3.5" />
-          <span className="hidden sm:inline">{opt.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function Shell({ items, children }: { items: NavItem[]; children: React.ReactNode }) {
   const t = useT();
-  const { user } = useAuth();
-  // Staff who are also on the roster get both interfaces from one login.
-  const canSwitch = isStaff(user) && user?.memberId != null;
 
   return (
     <div className="min-h-[100dvh] bg-plane">
@@ -98,7 +65,6 @@ function Shell({ items, children }: { items: NavItem[]; children: React.ReactNod
             </span>
             <span className="text-sm font-semibold text-ink">{t('app.name')}</span>
           </div>
-          {canSwitch && <ViewSwitcher />}
         </div>
       </header>
 
@@ -111,7 +77,7 @@ function Shell({ items, children }: { items: NavItem[]; children: React.ReactNod
 
 export function App() {
   const t = useT();
-  const { user, loading, playerView } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -128,14 +94,18 @@ export function App() {
   // enforces this too, so a deep link cannot slip past it.
   if (user.mustChangePin) return <ChangePin forced />;
 
-  const staffMode = isStaff(user) && !playerView;
+  const staffMode = isStaff(user);
 
+  // Four destinations used constantly, plus one drawer for the rest. The
+  // promotions board, groups and settings live behind "More" because they are
+  // opened occasionally, and the dashboard already links to whichever of them
+  // needs attention today.
   const staffItems: NavItem[] = [
     { to: '/', label: t('nav.home'), icon: 'home' },
     { to: '/classes', label: t('nav.classes'), icon: 'calendar' },
     { to: '/members', label: t('nav.members'), icon: 'users' },
     { to: '/payments', label: t('nav.payments'), icon: 'coins' },
-    { to: '/promotions', label: t('nav.promotions'), icon: 'award' },
+    { to: '/more', label: t('nav.more'), icon: 'list' },
   ];
 
   const playerItems: NavItem[] = [
@@ -166,6 +136,7 @@ export function App() {
         <Route path="/payments" element={<Payments />} />
         <Route path="/promotions" element={<Promotions />} />
         <Route path="/groups" element={<Groups />} />
+        <Route path="/more" element={<More />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/me" element={<MyProfile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
