@@ -1,3 +1,4 @@
+import { today } from '../shared/dates';
 import type { Role, SessionUser } from '../shared/types';
 import type { Env } from './env';
 
@@ -127,7 +128,7 @@ export async function resolveSession(env: Env, token: string): Promise<SessionUs
   const id = await tokenId(token);
   const row = await env.DB.prepare(
     `SELECT s.user_id, s.expires_at, u.login, u.role, u.must_change_pin, u.disabled,
-            u.member_id, m.name_ar
+            u.member_id, u.attendance_until, m.name_ar
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN members m ON m.id = u.member_id
@@ -142,6 +143,7 @@ export async function resolveSession(env: Env, token: string): Promise<SessionUs
       must_change_pin: number;
       disabled: number;
       member_id: number | null;
+      attendance_until: string | null;
       name_ar: string | null;
     }>();
 
@@ -152,6 +154,12 @@ export async function resolveSession(env: Env, token: string): Promise<SessionUs
     return null;
   }
 
+  // The grant is compared against the gym's day, not the server's, so it
+  // expires when the coach's own calendar says it does.
+  const todayLocal = today(env.APP_TIMEZONE || 'Asia/Hebron');
+  const staff = row.role === 'admin' || row.role === 'coach';
+  const grantLive = row.attendance_until != null && row.attendance_until >= todayLocal;
+
   return {
     userId: row.user_id,
     memberId: row.member_id,
@@ -159,6 +167,8 @@ export async function resolveSession(env: Env, token: string): Promise<SessionUs
     role: row.role,
     mustChangePin: !!row.must_change_pin,
     nameAr: row.name_ar,
+    canTakeAttendance: staff || grantLive,
+    attendanceUntil: row.attendance_until,
   };
 }
 

@@ -143,6 +143,13 @@ export interface SessionUser {
   role: Role;
   mustChangePin: boolean;
   nameAr: string | null;
+  /**
+   * May open classes and record attendance. True for staff by role, and for a
+   * player holding a live temporary grant.
+   */
+  canTakeAttendance: boolean;
+  /** End of a temporary grant, inclusive. Null when there is none. */
+  attendanceUntil: IsoDate | null;
 }
 
 export type ApiError = { error: string; code?: string; details?: unknown };

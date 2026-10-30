@@ -34,8 +34,13 @@ interface RosterRow {
   status: AttendanceStatus | null;
   coverage: Coverage | null;
   purchaseId: number | null;
-  preview: { coverage: Coverage; purchaseId: number | null; remainingAfter: number | null };
-  outstandingMinor: number;
+  preview: {
+    coverage: Coverage | null;
+    purchaseId: number | null;
+    remainingAfter: number | null;
+  };
+  /** null when the viewer is not staff — a helper never sees balances. */
+  outstandingMinor: number | null;
 }
 
 interface SessionDetail {
@@ -280,7 +285,7 @@ export function CheckIn() {
                             : ''}
                         </Badge>
                       )}
-                      {row.outstandingMinor > 0 && (
+                      {row.outstandingMinor !== null && row.outstandingMinor > 0 && (
                         <Badge tone="warning" icon="coins">
                           {money(row.outstandingMinor)}
                         </Badge>
@@ -372,7 +377,9 @@ function MemberSheet({
   const [backfill, setBackfill] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const uncovered = row.preview.coverage === 'uncovered';
+  // No coverage information at all means the viewer is not staff.
+  const coverage = row.preview.coverage;
+  const uncovered = coverage === 'uncovered';
 
   async function charge() {
     if (!planId || busy) return;
@@ -413,16 +420,15 @@ function MemberSheet({
           ))}
         </div>
 
+        {/* Withheld entirely from a helper who only runs the register. */}
+        {coverage !== null && (
         <div className="border-t border-hairline pt-4">
           <p className="mb-1 text-sm font-semibold text-ink-soft">{t('pay.coverage')}</p>
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge
-              tone={COVERAGE_TONE[row.preview.coverage].tone}
-              icon={COVERAGE_TONE[row.preview.coverage].icon}
-            >
-              {t(coverageKey(row.preview.coverage))}
+            <Badge tone={COVERAGE_TONE[coverage].tone} icon={COVERAGE_TONE[coverage].icon}>
+              {t(coverageKey(coverage))}
             </Badge>
-            {row.outstandingMinor > 0 && (
+            {row.outstandingMinor !== null && row.outstandingMinor > 0 && (
               <Badge tone="warning" icon="coins">
                 {t('pay.outstanding')}: {money(row.outstandingMinor)}
               </Badge>
@@ -448,6 +454,7 @@ function MemberSheet({
             </div>
           )}
         </div>
+        )}
       </div>
     </Sheet>
   );

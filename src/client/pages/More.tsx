@@ -32,6 +32,10 @@ export function More() {
     { to: '/groups', label: t('groups.title'), icon: 'list' },
   ];
 
+  // A plain link, so the browser handles the download itself rather than the
+  // app buffering a file it has no other use for.
+  const exportHref = '/api/admin/export/members.csv';
+
   return (
     <div className="space-y-5">
       <h1 className="text-lg font-semibold text-ink">{t('more.title')}</h1>
@@ -48,6 +52,24 @@ export function More() {
               onClick={() => nav(row.to)}
             />
           ))}
+          <a
+            href={exportHref}
+            download
+            className="flex w-full items-center gap-3 px-3 py-3.5 text-start transition-colors hover:bg-plane"
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-plane text-ink-soft">
+              <Icon name="list" className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-ink">
+                {t('more.export')}
+              </span>
+              <span className="block truncate text-xs text-ink-muted">
+                {t('more.exportHint')}
+              </span>
+            </span>
+            <Icon name="chevron" className="size-4 shrink-0 flip-rtl text-ink-muted" />
+          </a>
         </Card>
       </section>
 

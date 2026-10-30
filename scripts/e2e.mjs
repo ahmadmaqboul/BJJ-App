@@ -271,5 +271,79 @@ check('admin dashboard works', r.status === 200, r.body?.error);
 check('dashboard counts only this month\'s classes (2 of the 3 created)',
   r.body?.month?.classes === 2, r.body?.month);
 
+console.log('\n== runs-the-register feature ==');
+// An add-on to a member, not a role: it opens classes and nothing else, and
+// it carries an end date so it lapses on its own.
+const helper = members.find((m) => m.nameAr === 'علاء عاشور');
+
+r = await call('POST', `/api/members/${helper.id}/attendance-access`, { until: TODAY });
+check('refused before the member has a login',
+  r.status === 409 && r.body?.error === 'login_required_first', r.body);
+
+r = await call('POST', `/api/members/${helper.id}/login`, { role: 'player' });
+const helperPin = r.body?.pin;
+const helperLogin = r.body?.login;
+
+r = await call('POST', `/api/members/${helper.id}/attendance-access`, { until: '2020-01-01' });
+check('a past end date is refused', r.status === 400, r.body);
+
+r = await call('POST', `/api/members/${helper.id}/attendance-access`, { until: addDays(TODAY, 7) });
+check('granted for a week', r.status === 200 && r.body?.attendanceUntil === addDays(TODAY, 7), r.body);
+
+const adminCookie2 = cookie;
+cookie = '';
+await call('POST', '/api/auth/login', { login: helperLogin, pin: helperPin });
+await call('POST', '/api/auth/change-pin', { currentPin: helperPin, newPin: '778899' });
+
+r = await call('GET', '/api/auth/me');
+check('the helper holds the capability but is still a player',
+  r.body?.user?.canTakeAttendance === true && r.body?.user?.role === 'player', r.body?.user);
+
+r = await call('POST', '/api/sessions', { date: TODAY, startTime: '18:00', classType: 'gi' });
+check('helper can open a class', r.status === 201 || r.body?.existed === true, r.body?.error);
+const helperSession = r.body.session.id;
+
+r = await call('GET', `/api/sessions/${helperSession}`);
+check('helper can open the roster', r.status === 200, r.body?.error);
+check('balances are withheld from the helper',
+  r.body.roster.every((x) => x.outstandingMinor === null), r.body.roster?.[0]);
+check('coverage is withheld from the helper',
+  r.body.roster.every((x) => x.preview.coverage === null), r.body.roster?.[0]?.preview);
+
+r = await call('POST', `/api/sessions/${helperSession}/attendance`, {
+  entries: [{ memberId: alaaId, status: 'present' }],
+});
+check('helper can record attendance', r.status === 200, r.body?.error);
+
+check('helper cannot list members', (await call('GET', '/api/members')).status === 403);
+check('helper cannot see who owes money', (await call('GET', '/api/billing/outstanding')).status === 403);
+check('helper cannot see the promotion board', (await call('GET', '/api/promotions/board')).status === 403);
+check('helper cannot export', (await call('GET', '/api/admin/export/members.csv')).status === 403);
+
+cookie = adminCookie2;
+
+console.log('\n== export ==');
+{
+  const res = await fetch(`${BASE}/api/admin/export/members.csv`, { headers: { cookie } });
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  check('csv downloads as a file',
+    res.status === 200 && (res.headers.get('content-disposition') ?? '').includes('attachment'),
+    res.headers.get('content-disposition'));
+  // Without the BOM, Excel on Windows renders every Arabic name as mojibake.
+  check('starts with a UTF-8 BOM',
+    bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf,
+    [...bytes.slice(0, 3)]);
+
+  const text = new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '');
+  const lines = text.split('\r\n');
+  const head = lines[0].split(',');
+  check('one row per member', lines.length === 26, lines.length);
+  check('carries last payment and subscription end',
+    head.includes('تاريخ اخر دفعة') && head.includes('الاشتراك ساري لغاية'), head.slice(-5));
+  check('carries 12 months of attendance',
+    head.filter((h) => h.startsWith('شهر ')).length === 12,
+    head.filter((h) => h.startsWith('شهر ')).length);
+}
+
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}\n`);
 process.exit(failures === 0 ? 0 : 1);

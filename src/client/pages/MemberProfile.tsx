@@ -4,7 +4,7 @@ import type { Belt, Member, MemberStatus, PaymentMethod } from '../../shared/typ
 import type { Eligibility } from '../../shared/promotion';
 import { BELTS } from '../../shared/types';
 import { parseMoney } from '../../shared/billing';
-import { today } from '../../shared/dates';
+import { addDays, today } from '../../shared/dates';
 import {
   beltKey,
   memberTypeKey,
@@ -56,6 +56,12 @@ interface Profile {
   eligibility: Eligibility | null;
   rule: { maxStripes: number; nextBelt: Belt | null } | null;
   balance: { chargedMinor: number; paidMinor: number; outstandingMinor: number };
+  attendanceAccess: {
+    until: string | null;
+    active: boolean;
+    viaRole: boolean;
+    hasLogin: boolean;
+  };
   subscription: SubscriptionStatus;
   lastSeen: string | null;
   promotions: {
@@ -217,6 +223,14 @@ export function MemberProfile() {
         canEdit={admin}
         onChanged={reload}
       />
+
+      {admin && (
+        <AttendanceFeatureCard
+          memberId={member.id}
+          access={data.attendanceAccess}
+          onChanged={reload}
+        />
+      )}
 
       <Segmented
         value={tab}
@@ -1388,5 +1402,128 @@ function StatusSheet({
         )}
       </div>
     </Sheet>
+  );
+}
+
+
+/**
+ * "Runs the register" — an add-on to the member rather than an admin role.
+ *
+ * It grants exactly one thing: open a class and mark who attended. It is kept
+ * out of the login/permissions section on purpose, because it is a property of
+ * the person on the mat, and it always carries an end date so it expires by
+ * itself.
+ */
+function AttendanceFeatureCard({
+  memberId,
+  access,
+  onChanged,
+}: {
+  memberId: number;
+  access: Profile['attendanceAccess'];
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const { lang } = useLang();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [until, setUntil] = useState(() => access.until ?? addDays(today(), 7));
+
+  async function apply(value: string | null) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.post(`/api/members/${memberId}/attendance-access`, { until: value });
+      toast.show(t('feature.saved'), 'good');
+      setOpen(false);
+      onChanged();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      toast.show(t(key as 'err.generic', vars), 'warning');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const state = access.viaRole
+    ? { tone: 'info' as const, label: t('feature.viaRole') }
+    : access.active
+      ? {
+          tone: 'good' as const,
+          label: t('feature.activeUntil', { date: formatDate(access.until, lang) }),
+        }
+      : access.until
+        ? {
+            tone: 'neutral' as const,
+            label: t('feature.lapsed', { date: formatDate(access.until, lang) }),
+          }
+        : { tone: 'neutral' as const, label: t('feature.off') };
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">{t('feature.attendance')}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{t('feature.attendanceHint')}</p>
+        </div>
+        {!access.viaRole && access.hasLogin && (
+          <Button size="sm" icon="edit" onClick={() => setOpen(true)}>
+            {access.active ? t('common.edit') : t('feature.enable')}
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge tone={state.tone} icon={access.active || access.viaRole ? 'check' : 'minus'}>
+          {state.label}
+        </Badge>
+        {!access.hasLogin && (
+          <span className="text-xs text-ink-muted">{t('feature.needsLogin')}</span>
+        )}
+      </div>
+
+      {open && (
+        <Sheet
+          open
+          onClose={() => setOpen(false)}
+          title={t('feature.attendance')}
+          footer={
+            <div className="space-y-2">
+              <Button variant="primary" size="lg" onClick={() => apply(until)} disabled={busy}>
+                {busy ? t('common.saving') : t('common.save')}
+              </Button>
+              {access.until && (
+                <Button variant="ghost" size="lg" onClick={() => apply(null)} disabled={busy}>
+                  {t('feature.disable')}
+                </Button>
+              )}
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <p className="rounded-xl2 bg-series-tint px-3 py-2 text-xs text-ink">
+              {t('feature.attendanceHint')}
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              <Button onClick={() => setUntil(today())}>{t('feature.today')}</Button>
+              <Button onClick={() => setUntil(addDays(today(), 7))}>{t('feature.week')}</Button>
+              <Button onClick={() => setUntil(addDays(today(), 30))}>{t('feature.month')}</Button>
+            </div>
+
+            <Field label={t('feature.until')}>
+              <Input
+                type="date"
+                dir="ltr"
+                value={until}
+                min={today()}
+                onChange={(e) => setUntil(e.target.value)}
+              />
+            </Field>
+          </div>
+        </Sheet>
+      )}
+    </Card>
   );
 }

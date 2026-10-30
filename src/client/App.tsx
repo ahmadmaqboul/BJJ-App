@@ -108,8 +108,13 @@ export function App() {
     { to: '/more', label: t('nav.more'), icon: 'list' },
   ];
 
+  // A player who runs the register gets the classes tab, and nothing else
+  // the staff navigation carries.
   const playerItems: NavItem[] = [
     { to: '/me', label: t('nav.me'), icon: 'users' },
+    ...(user.canTakeAttendance
+      ? [{ to: '/classes', label: t('nav.classes'), icon: 'calendar' as const }]
+      : []),
     { to: '/me/settings', label: t('nav.settings'), icon: 'settings' },
   ];
 
@@ -119,6 +124,12 @@ export function App() {
         <Routes>
           <Route path="/me" element={<MyProfile />} />
           <Route path="/me/settings" element={<Settings />} />
+          {user.canTakeAttendance && (
+            <>
+              <Route path="/classes" element={<Classes />} />
+              <Route path="/classes/:id" element={<CheckIn />} />
+            </>
+          )}
           <Route path="*" element={<Navigate to="/me" replace state={{ from: location }} />} />
         </Routes>
       </Shell>

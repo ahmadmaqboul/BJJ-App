@@ -4,7 +4,7 @@ import { isIsoDate } from '../../shared/dates';
 import { pickCoverage, settleStatus, type Entitlement } from '../../shared/billing';
 import type { AttendanceStatus, ClassType, Coverage } from '../../shared/types';
 import type { AppBindings } from '../env';
-import { audit, requireAdmin, requireStaff } from '../middleware';
+import { audit, requireAdmin, requireAttendanceAccess } from '../middleware';
 import { balancesFor, entitlementsForMany, listMembers, loadSettings } from '../queries';
 import { readJson } from '../http';
 
@@ -16,7 +16,10 @@ const ATT_STATUSES: AttendanceStatus[] = ['present', 'absent', 'late', 'excused'
 /** Only these count toward promotion progress and consume paid sessions. */
 const COUNTS_AS_TRAINED = (s: AttendanceStatus) => s === 'present' || s === 'late';
 
-sessions.use('*', requireStaff);
+// Classes are gated on the capability, not the staff role, so a player
+// holding a temporary grant can run the register without also gaining the
+// member list and the money owed.
+sessions.use('*', requireAttendanceAccess);
 
 sessions.get('/', async (c) => {
   const to = c.req.query('to') ?? c.get('today');
@@ -176,6 +179,10 @@ sessions.get('/:id', async (c) => {
     allActive.filter((m) => m.memberType === 'coach').map((m) => m.id),
   );
 
+  // A temporary helper marks attendance; they do not see the club's finances.
+  const viewer = c.get('user');
+  const seesMoney = viewer.role === 'admin' || viewer.role === 'coach';
+
   const build = (
     memberId: number,
     nameAr: string,
@@ -198,13 +205,16 @@ sessions.get('/:id', async (c) => {
       status: rec?.status ?? null,
       coverage: rec?.coverage ?? null,
       purchaseId: rec?.purchase_id ?? null,
-      // What *would* pay for this class if checked in right now.
-      preview: {
-        coverage: preview.coverage,
-        purchaseId: preview.purchaseId,
-        remainingAfter: preview.remainingAfter,
-      },
-      outstandingMinor: balances.get(memberId)?.outstandingMinor ?? 0,
+      // What *would* pay for this class if checked in right now. Coverage
+      // drives a visible badge, so it is withheld along with the balance.
+      preview: seesMoney
+        ? {
+            coverage: preview.coverage,
+            purchaseId: preview.purchaseId,
+            remainingAfter: preview.remainingAfter,
+          }
+        : { coverage: null, purchaseId: null, remainingAfter: null },
+      outstandingMinor: seesMoney ? (balances.get(memberId)?.outstandingMinor ?? 0) : null,
     };
   };
 

@@ -82,6 +82,9 @@ export function errorKey(err: unknown): { key: string; vars?: Record<string, str
     'bad_amount',
     'member_not_found',
     'no_change',
+    'login_required_first',
+    'already_staff',
+    'date_in_past',
   ]);
 
   return { key: known.has(code ?? '') ? `err.${code}` : 'err.generic' };

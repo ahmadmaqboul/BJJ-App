@@ -43,6 +43,19 @@ export const requireStaff = requireRole('admin', 'coach');
 export const requireAdmin = requireRole('admin');
 
 /**
+ * Opening a class and marking who attended. Staff have it by role; a player
+ * can hold it temporarily through a dated grant. Deliberately narrower than
+ * `requireStaff`, which also opens the member list and the money owed.
+ */
+export const requireAttendanceAccess: MiddlewareHandler<AppBindings> = async (c, next) => {
+  const user = c.get('user');
+  if (!user?.canTakeAttendance) {
+    throw new HTTPException(403, { message: 'forbidden' });
+  }
+  await next();
+};
+
+/**
  * Players may only ever read their own record. Staff may read anyone's.
  * Call with the member id a route is about.
  */

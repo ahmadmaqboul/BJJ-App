@@ -144,4 +144,125 @@ admin.get('/audit', requireAdmin, async (c) => {
   return c.json({ entries: results ?? [] });
 });
 
+/**
+ * CSV export of the whole roster: one row per member, a column per recent
+ * month of attendance, plus the three things the old spreadsheet was really
+ * being kept for — when they last paid, when their subscription runs out, and
+ * what they owe.
+ *
+ * Excel on Windows reads a UTF-8 CSV as the system codepage unless it starts
+ * with a byte-order mark, which turns every Arabic name into mojibake. The BOM
+ * below is what keeps the file readable after download.
+ */
+admin.get('/export/members.csv', requireStaff, async (c) => {
+  const asOf = c.get('today');
+  const months = Number(c.req.query('months') ?? 12);
+
+  // The month columns, oldest first, ending with the current one.
+  const periods: string[] = [];
+  {
+    const [y, m] = asOf.split('-').map(Number);
+    for (let i = months - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(y!, m! - 1 - i, 1));
+      periods.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+    }
+  }
+
+  const [members, monthly, payments, subs, balances] = await Promise.all([
+    listMembers(c.env, { status: 'all' }),
+    c.env.DB.prepare(
+      `SELECT member_id, period, SUM(classes) AS classes FROM (
+         SELECT member_id, printf('%04d-%02d', year, month) AS period, classes
+           FROM legacy_monthly_attendance WHERE year > 0
+         UNION ALL
+         SELECT a.member_id, substr(cs.date, 1, 7) AS period, 1 AS classes
+           FROM attendance a JOIN class_sessions cs ON cs.id = a.session_id
+          WHERE a.status IN ('present','late')
+       ) GROUP BY member_id, period`,
+    ).all<{ member_id: number; period: string; classes: number }>(),
+    c.env.DB.prepare(
+      `SELECT member_id, MAX(paid_on) AS last_paid, SUM(amount_minor) AS paid
+         FROM payments GROUP BY member_id`,
+    ).all<{ member_id: number; last_paid: string; paid: number }>(),
+    c.env.DB.prepare(
+      `SELECT member_id, MAX(valid_until) AS until
+         FROM purchases
+        WHERE status = 'active' AND plan_type = 'monthly'
+        GROUP BY member_id`,
+    ).all<{ member_id: number; until: string | null }>(),
+    balancesFor(c.env),
+  ]);
+
+  const byMember = new Map<number, Map<string, number>>();
+  for (const r of monthly.results ?? []) {
+    const m = byMember.get(r.member_id) ?? new Map();
+    m.set(r.period, r.classes);
+    byMember.set(r.member_id, m);
+  }
+  const lastPaid = new Map((payments.results ?? []).map((r) => [r.member_id, r.last_paid]));
+  const subUntil = new Map((subs.results ?? []).map((r) => [r.member_id, r.until]));
+
+  const BELT_AR: Record<string, string> = {
+    white: 'أبيض', blue: 'أزرق', purple: 'بنفسجي', brown: 'بني', black: 'أسود',
+  };
+  const STATUS_AR: Record<string, string> = {
+    active: 'نشط', inactive: 'غير نشط', paused: 'موقوف مؤقتًا',
+  };
+
+  const header = [
+    'اسم اللاعب',
+    'رقم الجوال',
+    'النوع',
+    'الحالة',
+    'الحزام',
+    'عدد الخطوط',
+    'تاريخ اخر ترقية',
+    ...periods.map((p) => `شهر ${p}`),
+    'اجمالي الحضور',
+    'تاريخ اخر دفعة',
+    'الاشتراك ساري لغاية',
+    'المتبقي عليه',
+    'رصيد له',
+  ];
+
+  const rows = members.map((m) => {
+    const perMonth = byMember.get(m.id) ?? new Map();
+    const bal = balances.get(m.id)?.outstandingMinor ?? 0;
+    const until = subUntil.get(m.id) ?? null;
+
+    return [
+      m.nameAr,
+      m.phone ?? '',
+      m.memberType === 'coach' ? 'مدرب' : 'لاعب',
+      STATUS_AR[m.status] ?? m.status,
+      BELT_AR[m.belt] ?? m.belt,
+      m.stripes,
+      m.lastPromotionDate ?? '',
+      ...periods.map((p) => perMonth.get(p) ?? 0),
+      m.totalClasses,
+      lastPaid.get(m.id) ?? '',
+      // A coach is never billed, so an end date would be misleading.
+      m.memberType === 'coach' ? 'معفى' : (until ?? ''),
+      bal > 0 ? (bal / 100).toFixed(2) : '',
+      bal < 0 ? (-bal / 100).toFixed(2) : '',
+    ];
+  });
+
+  const escape = (v: string | number) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [header, ...rows].map((r) => r.map(escape).join(',')).join('\r\n');
+
+  await audit(c, 'export.members', 'members', null, { rows: rows.length, months });
+
+  return new Response('\uFEFF' + csv, {
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="jui-jitsu-${asOf}.csv"`,
+      'cache-control': 'no-store',
+    },
+  });
+});
+
 export default admin;

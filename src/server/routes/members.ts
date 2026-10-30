@@ -183,11 +183,25 @@ members.get('/:id', async (c) => {
   ]);
   const act = activity.get(id) ?? { everPurchased: false, lastSeen: null };
 
+  const login = await c.env.DB.prepare(
+    `SELECT role, attendance_until FROM users WHERE member_id = ?`,
+  )
+    .bind(id)
+    .first<{ role: string; attendance_until: string | null }>();
+
   return c.json({
     member,
     eligibility,
     rule: rule ?? null,
     balance,
+    attendanceAccess: {
+      until: login?.attendance_until ?? null,
+      // Live right now, as opposed to a grant that has already lapsed.
+      active: !!login?.attendance_until && login.attendance_until >= asOf,
+      // Staff run classes through their role, so the feature does not apply.
+      viaRole: login?.role === 'admin' || login?.role === 'coach',
+      hasLogin: !!login,
+    },
     // The second status: what is paying for them right now, derived live.
     subscription: subscriptionStatusOf(
       entitlements.get(id) ?? [],
@@ -438,22 +452,31 @@ members.post('/:id/login', requireAdmin, async (c) => {
 
   const cred = await newCredential(pin, c.env);
 
-  await c.env.DB.prepare(
-    `INSERT INTO users (member_id, login, role, pin_hash, pin_salt, pin_iterations, must_change_pin)
-     VALUES (?, ?, ?, ?, ?, ?, 1)
-     ON CONFLICT(login) DO UPDATE SET
-       member_id = excluded.member_id,
-       role = excluded.role,
-       pin_hash = excluded.pin_hash,
-       pin_salt = excluded.pin_salt,
-       pin_iterations = excluded.pin_iterations,
-       must_change_pin = 1,
-       disabled = 0,
-       failed_attempts = 0,
-       locked_until = NULL`,
-  )
-    .bind(id, login, role, cred.hash, cred.salt, cred.iterations)
-    .run();
+  // A member has at most one login. Re-issuing under a different phone number
+  // MOVES the existing one — upserting on the login string instead would
+  // leave a second user row pointing at the same member, which duplicates
+  // them in every list that joins users.
+  const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE member_id = ?`)
+    .bind(id)
+    .first<{ id: number }>();
+
+  if (existing) {
+    await c.env.DB.prepare(
+      `UPDATE users
+          SET login = ?, role = ?, pin_hash = ?, pin_salt = ?, pin_iterations = ?,
+              must_change_pin = 1, disabled = 0, failed_attempts = 0, locked_until = NULL
+        WHERE id = ?`,
+    )
+      .bind(login, role, cred.hash, cred.salt, cred.iterations, existing.id)
+      .run();
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO users (member_id, login, role, pin_hash, pin_salt, pin_iterations, must_change_pin)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    )
+      .bind(id, login, role, cred.hash, cred.salt, cred.iterations)
+      .run();
+  }
 
   // Keep the member's phone in step with the login they actually use.
   if (member.phone !== login) {
@@ -485,6 +508,49 @@ members.delete('/:id/login', requireAdmin, async (c) => {
   if (!res.meta.changes) throw new HTTPException(404, { message: 'no_login' });
   await audit(c, 'member.login_delete', 'member', id);
   return c.json({ ok: true });
+});
+
+/**
+ * Turns the "runs the register" feature on or off for a member.
+ *
+ * It is an add-on to the member, not an administrative role: it grants exactly
+ * "open a class and mark who attended" and nothing else — no member list, no
+ * money owed, no plans. It always carries an end date so it lapses by itself
+ * rather than depending on someone remembering to take it back.
+ *
+ * It lives on the login, so the member needs one first; without that there is
+ * nothing to sign in as.
+ */
+members.post('/:id/attendance-access', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const b = await readJson<{ until: string | null }>(c.req);
+
+  const user = await c.env.DB.prepare(
+    `SELECT id, role FROM users WHERE member_id = ?`,
+  )
+    .bind(id)
+    .first<{ id: number; role: 'admin' | 'coach' | 'player' }>();
+  if (!user) throw new HTTPException(409, { message: 'login_required_first' });
+
+  // Staff already run classes through their role; a dated grant on top would
+  // be dead weight that looks like it is doing something.
+  if (user.role !== 'player') {
+    throw new HTTPException(409, { message: 'already_staff' });
+  }
+
+  let until: string | null = null;
+  if (b.until) {
+    if (!isIsoDate(b.until)) throw new HTTPException(400, { message: 'bad_date' });
+    if (b.until < c.get('today')) throw new HTTPException(400, { message: 'date_in_past' });
+    until = b.until;
+  }
+
+  await c.env.DB.prepare(`UPDATE users SET attendance_until = ? WHERE id = ?`)
+    .bind(until, user.id)
+    .run();
+
+  await audit(c, 'member.attendance_access', 'member', id, { until });
+  return c.json({ attendanceUntil: until });
 });
 
 export default members;
