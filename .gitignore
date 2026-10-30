@@ -11,3 +11,9 @@ npm-debug.log*
 scripts/phones.local.json
 scripts/phones.local.sql
 *.tsbuildinfo
+
+# Local state written by Claude Code plugins into the working directory.
+# Machine-specific, rewritten on every run, and nothing to do with this app.
+.claude-flow/
+.swarm/
+ruvector.db
