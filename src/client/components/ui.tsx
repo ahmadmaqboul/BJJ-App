@@ -474,20 +474,34 @@ export function Sheet({
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
 
+  // Held in a ref so the effect below does not depend on onClose's identity.
+  // Callers pass an inline arrow, so a new one arrives on every parent render;
+  // with onClose in the dependency list the effect re-ran on each keystroke of
+  // a form whose state lives in the parent, and its focus() call pulled focus
+  // out of the field being typed into — which closes the keyboard on a phone.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    ref.current?.focus();
+
+    // Move focus into the dialog once, when it opens, and never steal it from
+    // something the user is already typing in.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
+
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

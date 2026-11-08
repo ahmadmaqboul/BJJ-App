@@ -116,7 +116,10 @@ interface PurchaseBody {
   customSessions?: number | null;
   customValidityDays?: number | null;
   amountMinor?: number;
+  /** When the subscription starts counting. */
   validFrom?: string;
+  /** When the money actually changed hands. Often not the same day. */
+  paidOn?: string;
   note?: string;
   /** Settle it immediately (the common case: cash on the mat). */
   payNow?: boolean;
@@ -143,7 +146,12 @@ billing.post('/purchases', requireStaff, async (c) => {
 
   const settings = await loadSettings(c.env);
   const currency = settings.default_currency ?? c.env.DEFAULT_CURRENCY ?? 'ILS';
+  // The day cover begins and the day the member handed the money over are
+  // separate facts: someone can pay on Thursday for a month that started on
+  // Sunday, or pay late for days they have already trained. Each defaults to
+  // today, and either can be backdated on its own.
   const validFrom = b.validFrom && isIsoDate(b.validFrom) ? b.validFrom : c.get('today');
+  const paidOn = b.paidOn && isIsoDate(b.paidOn) ? b.paidOn : c.get('today');
 
   let planId: number | null = null;
   let nameAr: string;
@@ -219,7 +227,7 @@ billing.post('/purchases', requireStaff, async (c) => {
       `INSERT INTO payments (member_id, purchase_id, amount_minor, currency, paid_on, method, recorded_by)
        VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     )
-      .bind(memberId, purchaseId, amountMinor, currency, c.get('today'), method, c.get('user').userId)
+      .bind(memberId, purchaseId, amountMinor, currency, paidOn, method, c.get('user').userId)
       .first<{ id: number }>();
     paymentId = pay!.id;
   }

@@ -74,11 +74,16 @@ check('حسن حجاوي holds 60 ILS CREDIT from the sheet note (the club owes 
   hasan?.balance?.outstandingMinor === -6000, hasan?.balance);
 
 // Six members had a payment date in the sheet and now carry a real subscription.
-const live = members.filter(
+const everSubscribed = members.filter((m) => m.subscription?.state !== 'never');
+check('6 members imported with a subscription from the sheet',
+  everSubscribed.length === 6, everSubscribed.map((m) => `${m.nameAr}:${m.subscription.state}`));
+
+// The sheet's dates are fixed history, so some of those lapse as time passes.
+const liveSubs = members.filter(
   (m) => m.subscription?.state === 'subscribed' || m.subscription?.state === 'ending_soon',
 );
-check('6 members imported with a live monthly subscription',
-  live.length === 6, live.map((m) => `${m.nameAr}:${m.subscription.state}`));
+check('every live one is among the six imported',
+  liveSubs.every((m) => everSubscribed.includes(m)), liveSubs.map((m) => m.nameAr));
 
 console.log('\n== promotion board ==');
 r = await call('GET', '/api/promotions/board');
@@ -111,10 +116,12 @@ check('duplicate class returns the existing one', r.body?.existed === true, r.bo
 r = await call('GET', `/api/sessions/${sessionId}`);
 const roster = r.body?.roster ?? [];
 check('roster covers the 19 active members', roster.length === 19, roster.length);
-// The six with imported subscriptions preview as covered; the rest do not.
-check('members with an imported subscription preview as monthly',
-  roster.filter((x) => x.preview.coverage === 'monthly').length === 6,
-  roster.filter((x) => x.preview.coverage === 'monthly').map((x) => x.nameAr));
+// Exactly the members whose imported subscription is still live preview as
+// covered — a count, not a constant, because the sheet's dates keep ageing.
+const liveIds = new Set(liveSubs.map((m) => m.id));
+check('members with a live subscription preview as monthly',
+  roster.filter((x) => x.preview.coverage === 'monthly').length === liveIds.size,
+  { previewed: roster.filter((x) => x.preview.coverage === 'monthly').length, live: liveIds.size });
 check('members the sheet never recorded paying preview as uncovered',
   roster.some((x) => x.preview.coverage === 'uncovered'),
   roster.slice(0, 2).map((x) => x.preview));
@@ -268,8 +275,15 @@ check('player sees what the team worked on', Array.isArray(r.body?.recentClasses
 cookie = adminCookie;
 r = await call('GET', '/api/admin/dashboard');
 check('admin dashboard works', r.status === 200, r.body?.error);
-check('dashboard counts only this month\'s classes (2 of the 3 created)',
-  r.body?.month?.classes === 2, r.body?.month);
+{
+  // How many of the three created classes land in the current month depends
+  // on where today sits in it.
+  const thisMonth = [TODAY, TOMORROW, IN_THREE_DAYS].filter(
+    (d) => d.slice(0, 7) === TODAY.slice(0, 7),
+  ).length;
+  check(`dashboard counts only this month's classes (${thisMonth} of the 3 created)`,
+    r.body?.month?.classes === thisMonth, { got: r.body?.month?.classes, want: thisMonth });
+}
 
 console.log('\n== runs-the-register feature ==');
 // An add-on to a member, not a role: it opens classes and nothing else, and
@@ -343,6 +357,41 @@ console.log('\n== export ==');
   check('carries 12 months of attendance',
     head.filter((h) => h.startsWith('شهر ')).length === 12,
     head.filter((h) => h.startsWith('شهر ')).length);
+}
+
+console.log('\n== paying late for days already trained ==');
+{
+  // The day cover starts and the day the money arrives are separate facts.
+  const late = members.find((m) => m.nameAr === 'أحمد زبلح');
+  const fiveAgo = addDays(TODAY, -5);
+  const tenAgo = addDays(TODAY, -10);
+
+  r = await call('POST', '/api/sessions', { date: fiveAgo, startTime: '19:00', classType: 'gi' });
+  const pastSession = r.body.session.id;
+  await call('POST', `/api/sessions/${pastSession}/attendance`, {
+    entries: [{ memberId: late.id, status: 'present' }],
+  });
+  r = await call('GET', `/api/sessions/${pastSession}`);
+  check('trained five days ago with nothing covering it',
+    r.body.roster.find((x) => x.memberId === late.id)?.coverage === 'uncovered');
+
+  const monthlyPlan = (await call('GET', '/api/billing/plans')).body.plans
+    .find((p) => p.type === 'monthly');
+
+  r = await call('POST', '/api/billing/purchases', {
+    memberId: late.id, planId: monthlyPlan.id, payNow: true, method: 'cash',
+    backfill: true, validFrom: tenAgo, paidOn: TODAY,
+  });
+  check('subscription starts on the backdated day', r.body?.purchase?.valid_from === tenAgo, r.body?.purchase);
+  check('it covers the class already trained', r.body?.backfilled === 1, r.body?.backfilled);
+
+  const bill = (await call('GET', `/api/billing/members/${late.id}`)).body;
+  check('the payment is dated today, not the start day',
+    bill.payments[0]?.paid_on === TODAY && TODAY !== tenAgo, bill.payments[0]?.paid_on);
+
+  r = await call('GET', `/api/sessions/${pastSession}`);
+  check('the past class now reads as covered',
+    r.body.roster.find((x) => x.memberId === late.id)?.coverage === 'monthly');
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}\n`);

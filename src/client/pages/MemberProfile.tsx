@@ -789,19 +789,29 @@ function SellPlanSheet({
   onDone: () => void;
 }) {
   const t = useT();
+  const { lang } = useLang();
   const toast = useToast();
-  const plansReq = useApi<{ plans: { id: number; name_ar: string; price_minor: number }[] }>(
-    '/api/billing/plans',
-  );
+  const plansReq = useApi<{
+    plans: { id: number; name_ar: string; price_minor: number; validity_days: number | null }[];
+  }>('/api/billing/plans');
   const plans = plansReq.data?.plans ?? [];
 
   const [planId, setPlanId] = useState('');
   const [payNow, setPayNow] = useState(true);
   const [backfill, setBackfill] = useState(true);
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  // Two separate dates: when cover begins, and when the money arrived.
+  const [validFrom, setValidFrom] = useState(() => today());
+  const [paidOn, setPaidOn] = useState(() => today());
   const [busy, setBusy] = useState(false);
 
   const selected = plans.find((p) => String(p.id) === planId) ?? plans[0];
+
+  // Show the end date the chosen start produces, so backdating is not blind.
+  const endsOn =
+    selected?.validity_days != null
+      ? addDays(validFrom, selected.validity_days - 1)
+      : null;
 
   async function submit() {
     if (!selected || busy) return;
@@ -813,6 +823,8 @@ function SellPlanSheet({
         payNow,
         method,
         backfill,
+        validFrom,
+        paidOn,
       });
       toast.show(
         res.backfilled > 0 ? t('pay.backfilled', { n: res.backfilled }) : t('pay.record'),
@@ -857,7 +869,31 @@ function SellPlanSheet({
             ))}
           </Select>
         </Field>
+        <Field
+          label={t('pay.startsOn')}
+          hint={endsOn ? t('pay.endsOn', { date: formatDate(endsOn, lang) }) : undefined}
+        >
+          <Input
+            type="date"
+            dir="ltr"
+            value={validFrom}
+            onChange={(e) => setValidFrom(e.target.value)}
+          />
+        </Field>
+
         <Switch checked={payNow} onChange={setPayNow} label={t('pay.payNow')} />
+
+        {payNow && (
+          <Field label={t('pay.paidOn')} hint={t('pay.datesHint')}>
+            <Input
+              type="date"
+              dir="ltr"
+              value={paidOn}
+              onChange={(e) => setPaidOn(e.target.value)}
+            />
+          </Field>
+        )}
+
         <Switch checked={backfill} onChange={setBackfill} label={t('pay.backfill')} />
       </div>
     </Sheet>
