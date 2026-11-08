@@ -4,7 +4,7 @@ import type { Belt, Member, MemberStatus, PaymentMethod } from '../../shared/typ
 import type { Eligibility } from '../../shared/promotion';
 import { BELTS } from '../../shared/types';
 import { parseMoney } from '../../shared/billing';
-import { addDays, today } from '../../shared/dates';
+import { addDays, daysBetween, today } from '../../shared/dates';
 import {
   beltKey,
   memberTypeKey,
@@ -128,6 +128,7 @@ export function MemberProfile() {
   const [editing, setEditing] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [sellOpen, setSellOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Profile['purchases'][number] | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -402,6 +403,15 @@ export function MemberProfile() {
                             )}
                           </p>
                         </div>
+                        {admin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon="edit"
+                            aria-label={t('pay.editPurchase')}
+                            onClick={() => setEditingPurchase(p)}
+                          />
+                        )}
                       </div>
                     </Card>
                   );
@@ -506,6 +516,17 @@ export function MemberProfile() {
           onClose={() => setPromoting(false)}
           onDone={() => {
             setPromoting(false);
+            reload();
+          }}
+        />
+      )}
+
+      {editingPurchase && (
+        <EditPurchaseSheet
+          purchase={editingPurchase}
+          onClose={() => setEditingPurchase(null)}
+          onDone={() => {
+            setEditingPurchase(null);
             reload();
           }}
         />
@@ -1561,5 +1582,157 @@ function AttendanceFeatureCard({
         </Sheet>
       )}
     </Card>
+  );
+}
+
+
+/**
+ * Corrects a subscription after it was recorded — above all its start date,
+ * which is the thing most often remembered wrong or entered late.
+ *
+ * Moving the start keeps the window the same length and re-resolves the
+ * classes it pays for, so the ledger cannot drift: classes the new window no
+ * longer spans go back to unpaid, and unpaid classes it now covers are picked
+ * up. The sheet reports both counts rather than changing things silently.
+ */
+function EditPurchaseSheet({
+  purchase,
+  onClose,
+  onDone,
+}: {
+  purchase: Profile['purchases'][number];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const t = useT();
+  const { lang } = useLang();
+  const toast = useToast();
+
+  const [validFrom, setValidFrom] = useState(purchase.valid_from);
+  const [amount, setAmount] = useState(String(purchase.amount_minor / 100));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  // The window keeps its length, so the end moves with the start.
+  const span =
+    purchase.valid_until != null
+      ? daysBetween(purchase.valid_from, purchase.valid_until)
+      : null;
+  const endsOn = span != null ? addDays(validFrom, span) : null;
+
+  async function save() {
+    const minor = parseMoney(amount);
+    if (minor === null || minor < 0) {
+      setError(t('err.bad_amount'));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.patch<{ released: number; backfilled: number }>(
+        `/api/billing/purchases/${purchase.id}`,
+        { validFrom, amountMinor: minor },
+      );
+      toast.show(
+        res.released || res.backfilled
+          ? t('pay.moved', { released: res.released, backfilled: res.backfilled })
+          : t('pay.saved'),
+        'good',
+      );
+      onDone();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      setError(t(key as 'err.generic', vars));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel() {
+    setBusy(true);
+    try {
+      await api.post(`/api/billing/purchases/${purchase.id}/cancel`);
+      toast.show(t('pay.saved'), 'good');
+      onDone();
+    } catch (err) {
+      const { key, vars } = errorKey(err);
+      toast.show(t(key as 'err.generic', vars), 'warning');
+      setConfirmCancel(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (confirmCancel) {
+    return (
+      <ConfirmSheet
+        open
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={cancel}
+        title={t('pay.cancel')}
+        body={t('pay.cancelConfirm')}
+        confirmLabel={t('common.confirm')}
+        busy={busy}
+      />
+    );
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={t('pay.editPurchase')}
+      footer={
+        <div className="space-y-2">
+          <Button variant="primary" size="lg" onClick={save} disabled={busy}>
+            {busy ? t('common.saving') : t('common.save')}
+          </Button>
+          {purchase.status !== 'cancelled' && (
+            <Button variant="ghost" size="lg" icon="trash" onClick={() => setConfirmCancel(true)}>
+              {t('pay.cancel')}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <Card className="bg-plane p-3">
+          <p className="text-sm font-medium text-ink">{purchase.plan_name_ar}</p>
+          <p className="text-xs text-ink-muted">
+            {t('pay.paidOf', {
+              paid: money(purchase.paid_minor),
+              total: money(purchase.amount_minor),
+            })}
+          </p>
+        </Card>
+
+        <Field
+          label={t('pay.startsOn')}
+          hint={endsOn ? t('pay.endsOn', { date: formatDate(endsOn, lang) }) : t('pay.noExpiry')}
+        >
+          <Input
+            type="date"
+            dir="ltr"
+            value={validFrom}
+            onChange={(e) => setValidFrom(e.target.value)}
+          />
+        </Field>
+
+        <p className="rounded-xl2 bg-series-tint px-3 py-2 text-xs text-ink">
+          {t('pay.moveHint')}
+        </p>
+
+        <Field label={t('pay.amount')} error={error ?? undefined}>
+          <Input
+            inputMode="decimal"
+            dir="ltr"
+            className="text-start"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </Field>
+      </div>
+    </Sheet>
   );
 }

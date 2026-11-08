@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
-import { addDays, isIsoDate } from '../../shared/dates';
+import { addDays, daysBetween, isIsoDate } from '../../shared/dates';
 import { pickCoverage, type Entitlement } from '../../shared/billing';
 import type { Coverage, PaymentMethod, PlanType } from '../../shared/types';
 import type { AppBindings, Env } from '../env';
@@ -533,6 +533,189 @@ billing.delete('/plans/:id', requireAdmin, async (c) => {
 
   await audit(c, 'plan.delete', 'plan', id, { nameAr: plan.name_ar, purchases: used?.n ?? 0 });
   return c.json({ ok: true, purchasesKept: used?.n ?? 0 });
+});
+
+/**
+ * Edits a purchase after the fact — above all its start date, because the
+ * date is the thing most often got wrong or remembered late.
+ *
+ * Moving the window keeps its length: a 30-day subscription stays 30 days,
+ * it just starts elsewhere. The attendance it pays for is then re-resolved,
+ * which is the part that makes this safe rather than merely convenient:
+ *
+ *   - classes it covered that now fall OUTSIDE the window are released back
+ *     to uncovered, and any session they consumed is returned;
+ *   - classes inside the new window that are uncovered get picked up.
+ *
+ * Without that, moving a date would leave classes pointing at a subscription
+ * that no longer spans them, and the member's balance would quietly drift.
+ */
+billing.patch('/purchases/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const b = await readJson<{
+    validFrom: string;
+    amountMinor: number;
+    note: string | null;
+  }>(c.req);
+
+  const purchase = await c.env.DB.prepare(
+    `SELECT id, member_id, plan_type, sessions_total, sessions_used,
+            valid_from, valid_until, amount_minor, status
+       FROM purchases WHERE id = ?`,
+  )
+    .bind(id)
+    .first<{
+      id: number;
+      member_id: number;
+      plan_type: Entitlement['planType'];
+      sessions_total: number | null;
+      sessions_used: number;
+      valid_from: string;
+      valid_until: string | null;
+      amount_minor: number;
+      status: Entitlement['status'];
+    }>();
+  if (!purchase) throw new HTTPException(404, { message: 'purchase_not_found' });
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  const put = (col: string, v: unknown) => {
+    sets.push(`${col} = ?`);
+    binds.push(v);
+  };
+
+  let movedFrom: string | null = null;
+  let newUntil = purchase.valid_until;
+
+  if (b.validFrom !== undefined) {
+    if (!isIsoDate(b.validFrom)) throw new HTTPException(400, { message: 'bad_date' });
+    if (b.validFrom !== purchase.valid_from) {
+      movedFrom = b.validFrom;
+      // Keep the window the same length, so a month stays a month.
+      if (purchase.valid_until) {
+        const span = daysBetween(purchase.valid_from, purchase.valid_until);
+        newUntil = addDays(b.validFrom, span);
+        put('valid_until', newUntil);
+      }
+      put('valid_from', b.validFrom);
+    }
+  }
+
+  if (b.amountMinor !== undefined) {
+    if (!Number.isInteger(b.amountMinor) || b.amountMinor < 0) {
+      throw new HTTPException(400, { message: 'bad_amount' });
+    }
+    put('amount_minor', b.amountMinor);
+  }
+  if (b.note !== undefined) put('note', b.note?.trim() || null);
+
+  if (!sets.length) throw new HTTPException(400, { message: 'nothing_to_update' });
+
+  binds.push(id);
+  await c.env.DB.prepare(`UPDATE purchases SET ${sets.join(', ')} WHERE id = ?`)
+    .bind(...binds)
+    .run();
+
+  let released = 0;
+  let backfilled = 0;
+
+  if (movedFrom) {
+    // Anything this purchase was paying for that the new window no longer
+    // spans goes back to uncovered, and its consumed session is returned.
+    const { results: orphaned } = await c.env.DB.prepare(
+      `SELECT a.id, a.coverage
+         FROM attendance a
+         JOIN class_sessions cs ON cs.id = a.session_id
+        WHERE a.purchase_id = ?
+          AND (cs.date < ? OR (? IS NOT NULL AND cs.date > ?))`,
+    )
+      .bind(id, movedFrom, newUntil, newUntil)
+      .all<{ id: number; coverage: string | null }>();
+
+    const rows = orphaned ?? [];
+    released = rows.length;
+
+    if (released) {
+      const consumed = rows.filter(
+        (r) => r.coverage === 'package' || r.coverage === 'single',
+      ).length;
+
+      const statements = [
+        c.env.DB.prepare(
+          `UPDATE attendance SET coverage = 'uncovered', purchase_id = NULL
+            WHERE id IN (${rows.map(() => '?').join(',')})`,
+        ).bind(...rows.map((r) => r.id)),
+      ];
+      if (consumed) {
+        statements.push(
+          c.env.DB.prepare(
+            `UPDATE purchases SET sessions_used = MAX(0, sessions_used - ?) WHERE id = ?`,
+          ).bind(consumed, id),
+        );
+      }
+      await c.env.DB.batch(statements);
+    }
+
+    // And classes the new window does span, which nothing was paying for.
+    backfilled = await backfillUncovered(c.env, purchase.member_id, id);
+  }
+
+  await resettleMemberPurchases(c.env, [purchase.member_id], c.get('today'));
+  await audit(c, 'purchase.update', 'purchase', id, {
+    memberId: purchase.member_id,
+    movedFrom,
+    released,
+    backfilled,
+  });
+
+  return c.json({
+    purchase: await c.env.DB.prepare(`SELECT * FROM purchases WHERE id = ?`).bind(id).first(),
+    released,
+    backfilled,
+    balance: (await balancesFor(c.env, [purchase.member_id])).get(purchase.member_id) ?? null,
+  });
+});
+
+/** Corrects a payment's date or amount — the other half of a wrong date. */
+billing.patch('/payments/:id', requireAdmin, async (c) => {
+  const id = Number(c.req.param('id'));
+  const b = await readJson<{ paidOn: string; amountMinor: number; note: string | null }>(c.req);
+
+  const payment = await c.env.DB.prepare(`SELECT member_id FROM payments WHERE id = ?`)
+    .bind(id)
+    .first<{ member_id: number }>();
+  if (!payment) throw new HTTPException(404, { message: 'payment_not_found' });
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (b.paidOn !== undefined) {
+    if (!isIsoDate(b.paidOn)) throw new HTTPException(400, { message: 'bad_date' });
+    sets.push('paid_on = ?');
+    binds.push(b.paidOn);
+  }
+  if (b.amountMinor !== undefined) {
+    if (!Number.isInteger(b.amountMinor) || b.amountMinor <= 0) {
+      throw new HTTPException(400, { message: 'bad_amount' });
+    }
+    sets.push('amount_minor = ?');
+    binds.push(b.amountMinor);
+  }
+  if (b.note !== undefined) {
+    sets.push('note = ?');
+    binds.push(b.note?.trim() || null);
+  }
+  if (!sets.length) throw new HTTPException(400, { message: 'nothing_to_update' });
+
+  binds.push(id);
+  await c.env.DB.prepare(`UPDATE payments SET ${sets.join(', ')} WHERE id = ?`)
+    .bind(...binds)
+    .run();
+
+  await audit(c, 'payment.update', 'payment', id, b);
+  return c.json({
+    payment: await c.env.DB.prepare(`SELECT * FROM payments WHERE id = ?`).bind(id).first(),
+    balance: (await balancesFor(c.env, [payment.member_id])).get(payment.member_id) ?? null,
+  });
 });
 
 export default billing;

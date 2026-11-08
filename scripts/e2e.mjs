@@ -10,6 +10,10 @@ const addDays = (iso, n) => {
   return new Date(Date.UTC(y, m - 1, d) + n * 86_400_000).toISOString().slice(0, 10);
 };
 const TOMORROW = addDays(TODAY, 1);
+const daysBetween = (from, to) => {
+  const ms = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((ms(to) - ms(from)) / 86_400_000);
+};
 const IN_THREE_DAYS = addDays(TODAY, 3);
 let cookie = '';
 let failures = 0;
@@ -392,6 +396,59 @@ console.log('\n== paying late for days already trained ==');
   r = await call('GET', `/api/sessions/${pastSession}`);
   check('the past class now reads as covered',
     r.body.roster.find((x) => x.memberId === late.id)?.coverage === 'monthly');
+}
+
+console.log('\n== correcting a subscription after the fact ==');
+{
+  // Moving a start date must re-resolve what the subscription pays for, or
+  // the ledger drifts: classes outside the new window stay wrongly covered.
+  const fixer = members.find((m) => m.nameAr === 'سعيد جوابرة');
+
+  r = await call('POST', '/api/sessions', {
+    date: addDays(TODAY, -5), startTime: '17:00', classType: 'gi',
+  });
+  const past = r.body.session.id;
+  await call('POST', `/api/sessions/${past}/attendance`, {
+    entries: [{ memberId: fixer.id, status: 'present' }],
+  });
+
+  const monthlyPlan = (await call('GET', '/api/billing/plans')).body.plans
+    .find((p) => p.type === 'monthly');
+  r = await call('POST', '/api/billing/purchases', {
+    memberId: fixer.id, planId: monthlyPlan.id, payNow: true,
+    backfill: true, validFrom: addDays(TODAY, -7),
+  });
+  const purchaseId = r.body.purchase.id;
+  const spanBefore = r.body.purchase.valid_until;
+
+  const coverage = async () =>
+    (await call('GET', `/api/sessions/${past}`)).body.roster
+      .find((x) => x.memberId === fixer.id)?.coverage;
+
+  check('the backdated subscription covers the past class', (await coverage()) === 'monthly');
+
+  // Move the start past that class.
+  r = await call('PATCH', `/api/billing/purchases/${purchaseId}`, {
+    validFrom: addDays(TODAY, -2),
+  });
+  check('moving the start keeps the window the same length',
+    daysBetween(addDays(TODAY, -2), r.body.purchase.valid_until) ===
+      daysBetween(addDays(TODAY, -7), spanBefore),
+    { was: spanBefore, now: r.body.purchase.valid_until });
+  check('the class it no longer spans is released', r.body?.released === 1, r.body);
+  check('and reads as unpaid again', (await coverage()) === 'uncovered');
+
+  // Move it back.
+  r = await call('PATCH', `/api/billing/purchases/${purchaseId}`, {
+    validFrom: addDays(TODAY, -7),
+  });
+  check('moving it back picks the class up again', r.body?.backfilled === 1, r.body);
+  check('and it reads as covered', (await coverage()) === 'monthly');
+
+  // Correcting the amount leaves the member in credit.
+  r = await call('PATCH', `/api/billing/purchases/${purchaseId}`, { amountMinor: 9000 });
+  check('lowering the amount below what was paid leaves credit',
+    r.body?.balance?.outstandingMinor === -6000, r.body?.balance);
 }
 
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}\n`);
