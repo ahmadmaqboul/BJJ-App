@@ -4,7 +4,14 @@ import { monthBounds } from '../../shared/dates';
 import { evaluateEligibility } from '../../shared/promotion';
 import type { AppBindings } from '../env';
 import { audit, requireAdmin, requireStaff } from '../middleware';
-import { balancesFor, listMembers, loadRules, loadSettings, setSetting } from '../queries';
+import {
+  balancesFor,
+  listMembers,
+  loadRules,
+  loadSettings,
+  outstandingSummary,
+  setSetting,
+} from '../queries';
 import { readJson } from '../http';
 
 const admin = new Hono<AppBindings>();
@@ -48,11 +55,10 @@ admin.get('/dashboard', requireStaff, async (c) => {
   const asOf = c.get('today');
   const { start, end } = monthBounds(asOf);
 
-  const [members, rules, settings, balances] = await Promise.all([
+  const [members, rules, settings] = await Promise.all([
     listMembers(c.env, { status: 'all' }),
     loadRules(c.env),
     loadSettings(c.env),
-    balancesFor(c.env),
   ]);
 
   const lookahead = Number(settings.promotion_lookahead_days ?? 60);
@@ -99,10 +105,7 @@ admin.get('/dashboard', requireStaff, async (c) => {
       collected_this_month: number;
     }>();
 
-  const outstandingMinor = [...balances.values()].reduce(
-    (sum, b) => sum + Math.max(0, b.outstandingMinor),
-    0,
-  );
+  const owed = await outstandingSummary(c.env);
 
   const lastSession = await c.env.DB.prepare(
     `SELECT cs.id, cs.date, cs.class_type, cs.technique_title,
@@ -128,8 +131,8 @@ admin.get('/dashboard', requireStaff, async (c) => {
       uncovered: monthStats?.uncovered_this_month ?? 0,
       collectedMinor: monthStats?.collected_this_month ?? 0,
     },
-    outstandingMinor,
-    membersOwing: [...balances.values()].filter((b) => b.outstandingMinor > 0).length,
+    outstandingMinor: owed.totalMinor,
+    membersOwing: owed.membersOwing,
     lastSession,
   });
 });

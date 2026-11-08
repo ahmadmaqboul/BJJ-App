@@ -5,7 +5,13 @@ import { pickCoverage, type Entitlement } from '../../shared/billing';
 import type { Coverage, PaymentMethod, PlanType } from '../../shared/types';
 import type { AppBindings, Env } from '../env';
 import { assertCanReadMember, audit, requireAdmin, requireStaff } from '../middleware';
-import { balancesFor, entitlementsFor, getMember, loadSettings } from '../queries';
+import {
+  balancesFor,
+  entitlementsFor,
+  getMember,
+  loadSettings,
+  outstandingSummary,
+} from '../queries';
 import { readJson } from '../http';
 import { resettleMemberPurchases } from './sessions';
 
@@ -459,13 +465,15 @@ billing.get('/outstanding', requireStaff, async (c) => {
     };
   });
 
-  // Coaches train for free, so they never count toward money owed — but a
-  // real balance they carry is still shown on their own row.
-  const billable = rows.filter((r) => r.memberType !== 'coach');
+  // A coach's own row still shows any balance they carry; the club total
+  // comes from the one shared definition so it cannot drift from the
+  // dashboard's figure.
+  const owed = await outstandingSummary(c.env);
 
   return c.json({
     rows: rows.sort((a, b) => b.outstandingMinor - a.outstandingMinor),
-    totalOutstandingMinor: billable.reduce((sum, r) => sum + Math.max(0, r.outstandingMinor), 0),
+    totalOutstandingMinor: owed.totalMinor,
+    membersOwing: owed.membersOwing,
   });
 });
 

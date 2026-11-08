@@ -10,7 +10,7 @@ import type { MemberType, StatusReason, SubscriptionState } from '../shared/memb
  */
 const ar = {
   'app.name': 'JUI-Jitsu',
-  'app.tagline': 'الحضور والاشتراكات والترقيات',
+  'app.tagline': 'الحضور والاشتراكات والترقيات ✦',
 
   'nav.home': 'الرئيسية',
   'nav.classes': 'الحصص',
@@ -322,6 +322,9 @@ const ar = {
   'common.yes': 'نعم',
   'common.no': 'لا',
   'common.more': 'المزيد',
+  'update.ready': 'في نسخة جديدة من التطبيق',
+  'update.apply': 'حدّث الآن',
+  'update.later': 'بعدين',
   'common.edit': 'تعديل',
 
   'err.generic': 'صار خطأ. جرّب مرة ثانية.',
@@ -775,6 +778,9 @@ const en: Record<Key, string> = {
   'common.yes': 'Yes',
   'common.no': 'No',
   'common.more': 'More',
+  'update.ready': 'A new version of the app is ready',
+  'update.apply': 'Update now',
+  'update.later': 'Later',
   'common.edit': 'Edit',
 
   'err.generic': 'Something went wrong. Try again.',

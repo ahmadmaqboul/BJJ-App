@@ -16,6 +16,7 @@ import { Groups } from './pages/Groups';
 import { Settings } from './pages/Settings';
 import { MyProfile } from './pages/MyProfile';
 import { More } from './pages/More';
+import { UpdateBanner } from './components/UpdateBanner';
 
 interface NavItem {
   to: string;
@@ -70,6 +71,7 @@ function Shell({ items, children }: { items: NavItem[]; children: React.ReactNod
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-4">{children}</main>
 
+      <UpdateBanner />
       <BottomNav items={items} />
     </div>
   );

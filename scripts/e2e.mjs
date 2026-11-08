@@ -451,5 +451,41 @@ console.log('\n== correcting a subscription after the fact ==');
     r.body?.balance?.outstandingMinor === -6000, r.body?.balance);
 }
 
+console.log('\n== the club total is one number, not two ==');
+{
+  // The dashboard and the payments screen each used to compute this, and
+  // disagreed: one counted coaches, the other did not.
+  const agree = async (label) => {
+    const d = (await call('GET', '/api/admin/dashboard')).body;
+    const o = (await call('GET', '/api/billing/outstanding')).body;
+    check(`${label}: both screens report the same total`,
+      d.outstandingMinor === o.totalOutstandingMinor && d.membersOwing === o.membersOwing,
+      { dashboard: [d.outstandingMinor, d.membersOwing], payments: [o.totalOutstandingMinor, o.membersOwing] });
+    return d;
+  };
+
+  const before = await agree('to start with');
+
+  // A coach who owes must not move the club total.
+  const coach = members.find((m) => m.nameAr === 'حميد يعيش');
+  await call('PATCH', `/api/members/${coach.id}`, { memberType: 'coach' });
+  const plan = (await call('GET', '/api/billing/plans')).body.plans.find((p) => p.type === 'monthly');
+  await call('POST', '/api/billing/purchases', { memberId: coach.id, planId: plan.id, payNow: false });
+
+  const withCoachDebt = await agree('with a coach owing');
+  check('a coach owing does not count toward the club total',
+    withCoachDebt.outstandingMinor === before.outstandingMinor,
+    { before: before.outstandingMinor, after: withCoachDebt.outstandingMinor });
+
+  // A player who owes must.
+  const payer = members.find((m) => m.nameAr === 'عمر عنبتاوي');
+  await call('POST', '/api/billing/purchases', { memberId: payer.id, planId: plan.id, payNow: false });
+
+  const withPlayerDebt = await agree('with a player owing');
+  check('a player owing does count',
+    withPlayerDebt.outstandingMinor === before.outstandingMinor + plan.price_minor,
+    { before: before.outstandingMinor, after: withPlayerDebt.outstandingMinor });
+}
+
 console.log(`\n${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`}\n`);
 process.exit(failures === 0 ? 0 : 1);

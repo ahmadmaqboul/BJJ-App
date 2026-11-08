@@ -312,6 +312,41 @@ export async function activityFor(
   return map;
 }
 
+export interface OutstandingSummary {
+  /** Money owed to the club, in minor units. Credits never reduce it. */
+  totalMinor: number;
+  /** How many members owe something. */
+  membersOwing: number;
+}
+
+/**
+ * What the club is owed — the single definition of it.
+ *
+ * Two rules make this easy to get subtly wrong, so they live here rather than
+ * in each screen: a coach is never billed and so never counts toward the
+ * total, and a member in credit does not reduce what others owe (their
+ * negative balance is theirs, not a discount on the club's receivables).
+ *
+ * The dashboard and the payments screen each used to compute this themselves,
+ * and disagreed: one counted coaches, the other did not.
+ */
+export async function outstandingSummary(env: Env): Promise<OutstandingSummary> {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(owed), 0) AS total, COUNT(*) AS n
+       FROM (
+         SELECT COALESCE((SELECT SUM(amount_minor) FROM purchases
+                           WHERE member_id = m.id AND status != 'cancelled'), 0)
+              - COALESCE((SELECT SUM(amount_minor) FROM payments
+                           WHERE member_id = m.id), 0) AS owed
+           FROM members m
+          WHERE m.member_type != 'coach'
+       )
+      WHERE owed > 0`,
+  ).first<{ total: number; n: number }>();
+
+  return { totalMinor: row?.total ?? 0, membersOwing: row?.n ?? 0 };
+}
+
 // ---------------------------------------------------------------- settings ---
 
 export async function loadSettings(env: Env): Promise<Record<string, string>> {

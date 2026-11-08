@@ -6,7 +6,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate': the app is used mid-register and mid-form,
+      // and a silent reload would throw away what someone had typed. The user
+      // is told instead, and applies it when they are ready. See lib/updates.ts.
+      registerType: 'prompt',
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'JUI-Jitsu — إدارة الفريق',
